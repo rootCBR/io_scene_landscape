@@ -87,13 +87,6 @@ class GenericParameters(MarkerParameters):
         self.B = read[1]
         self.C = read[2]
         self.color = to_color(read[3])
-        
-        if True:
-            print("")
-            print("A:", self.A)
-            print("B:", self.B)
-            print("C:", self.C)
-            print("color:", self.color)
     
     def serialize(self, file : BufferedWriter) -> None:
         file.write(struct.pack('3f I', 
@@ -511,6 +504,5 @@ def get_marker_parameters_class(input_type):
         result = ParticleEmitterParameters
     elif type == MarkerType.SOUND_EMITTER:
         result = SoundEmitterParameters
-    print("result:", result)
     return result
     

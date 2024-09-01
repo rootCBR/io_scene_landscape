@@ -141,7 +141,7 @@ class MoxFile:
             material.id = readData_material[0]
             self.materials.insert(i, material)
                 
-            if True:
+            if False:
                 print("")
                 print("id:", material.id)
                     
@@ -1265,11 +1265,9 @@ class ImportMox(Operator, ImportHelper):
         print("ImportMox.execute() IN")
         moxFilePath = Path(self.filepath)
         mtlFilePath = moxFilePath.with_suffix(".mtl")
-        #cpoFilePath = moxFilePath.with_name(moxFilePath.stem + "_colli.cpo")
-        textureFolderPath = moxFilePath.parent / "Textures"
-        #print("moxFilePath:", moxFilePath)
-        #print("mtlFilePath:", mtlFilePath)
-        #print("cpoFilePath:", cpoFilePath)
+        textureFolderPath = moxFilePath.parent / "Textures" / "tga"
+        print("moxFilePath:", moxFilePath)
+        print("mtlFilePath:", mtlFilePath)
         print("textureFolderPath:", textureFolderPath)
         
         addon_directory = Path(__file__).parent
@@ -1325,7 +1323,7 @@ class ImportMox(Operator, ImportHelper):
                         if tex_name:
                             tex_file_path = textureFolderPath / tex_name
             
-                            #print("tex_name:", tex_name)
+                            print("tex_name:", tex_name)
 
                             loaded_texture = None
 
