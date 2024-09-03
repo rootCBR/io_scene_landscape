@@ -9,70 +9,77 @@ from mathutils import Vector
 from pathlib import Path
 
 class QadFile:
-    version = 0
-    # ...
-    textureNames = []
-    bumpTextureNames = []
-    quads = []
-    chunks = []
-    materials = []
+    def __init__(self):
+        self.version = 0
+        # ...
+        self.textureNames = []
+        self.bumpTextureNames = []
+        self.quads = []
+        self.chunks = []
+        self.materials = []
 
 class QadMaterial:
-    textureNameIndices = []
-    bumpTextureNameIndices = []
-    materialType = 0
-    textureAnimIndex = 0
-    texMods = []
-    texModCrcs = []
+    def __init__(self):
+        self.textureNameIndices = []
+        self.bumpTextureNameIndices = []
+        self.materialType = 0
+        self.textureAnimIndex = 0
+        self.texMods = []
+        self.texModCrcs = []
 
 class QadQuad:
-    quadX = 0
-    quadY = 0
-    firstFace = 0
-    numFaces = 0
-    firstChunk = 0
-    numChunks = 0
-    circumSpherePositionX = 0.0
-    circumSpherePositionY = 0.0
-    circumSpherePositionZ = 0.0
-    circumSphereRadius = 0.0
-    firstObject = 0
-    numObjects = 0
-    firstMarker = 0
-    numMarkers = 0
-    vertexBufferIndex = 0
+    def __init__(self):
+        self.quadX = 0
+        self.quadY = 0
+        self.firstFace = 0
+        self.numFaces = 0
+        self.firstChunk = 0
+        self.numChunks = 0
+        self.circumSpherePositionX = 0.0
+        self.circumSpherePositionY = 0.0
+        self.circumSpherePositionZ = 0.0
+        self.circumSphereRadius = 0.0
+        self.firstObject = 0
+        self.numObjects = 0
+        self.firstMarker = 0
+        self.numMarkers = 0
+        self.vertexBufferIndex = 0
 
 class QadChunk:
-    firstFace = 0
-    numFaces = 0
-    materialIndex = 0
-    viewDistLayer = 0
+    def __init__(self):
+        self.firstFace = 0
+        self.numFaces = 0
+        self.materialIndex = 0
+        self.viewDistLayer = 0
 
 class GeoFile:
-    version = 0
-    vertexFormat = 0
-    bufferCount = 0
-    indexCount = 0
-    bufferVertexCounts = []
-    vertexBuffers = []
-    triangles = []
+    def __init__(self):
+        self.version = 0
+        self.vertexFormat = 0
+        self.bufferCount = 0
+        self.indexCount = 0
+        self.bufferVertexCounts = []
+        self.vertexBuffers = []
+        self.triangles = []
 
 class GeoVertex:
-    positionX = 0.0
-    positionY = 0.0
-    positionZ = 0.0
-    normal = 0
-    u1 = 0.0
-    v1 = 0.0
-    u2 = 0.0
-    v2 = 0.0
-    blend = 0
-    ambient = 0
+    def __init__(self):
+        self.positionX = 0.0
+        self.positionY = 0.0
+        self.positionZ = 0.0
+        self.normal = 0
+        self.u1 = 0.0
+        self.v1 = 0.0
+        self.u2 = 0.0
+        self.v2 = 0.0
+        self.blend = 0
+        self.ambient = 0
     
 class GeoTriangle:
-    VertexIndex1 = 0
-    VertexIndex2 = 0
-    VertexIndex3 = 0
+    def __init__(self):
+        self.VertexIndex1 = 0
+        self.VertexIndex2 = 0
+        self.VertexIndex3 = 0
 
 class ImportQad(Operator, ImportHelper):
     """This appears in the tooltip of the operator and in the generated docs"""

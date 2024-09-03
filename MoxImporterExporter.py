@@ -4,8 +4,9 @@ import bmesh
 import struct
 import math
 import io
+import numpy as np
 
-from bpy_extras.io_utils import ImportHelper, ExportHelper, axis_conversion
+from bpy_extras.io_utils import ImportHelper, ExportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty
 from bpy.types import Operator
 from mathutils import Vector, Matrix
@@ -314,13 +315,12 @@ class MoxFile:
             
         if use_tangents:
             for i in range(numberOfVertices):
-                #tangent = self.tangents[i]
+                tangent : MoxTangent = self.tangents[i]
                 
-                #readData_tangent = struct.unpack('8H', reader.read(16))
-                #tangent.uv1 = [ readData_tangent[0], readData_tangent[1], readData_tangent[2], readData_tangent[3] ]
-                #tangent.uv2 = [ readData_tangent[4], readData_tangent[5], readData_tangent[6], readData_tangent[7] ]
-                #self.tangents.insert(i, tangent)
-                pass
+                writer.write(struct.pack("8e", 
+                    *tangent.uv1, 
+                    *tangent.uv2
+                ))
                 
         for i in range(numberOfTriangles):
             triangle = self.triangles[i]
@@ -469,8 +469,8 @@ class MoxVertex:
     
 class MoxTangent:
     def __init__(self):
-        self.uv1 = []
-        self.uv2 = []
+        self.uv1 = None
+        self.uv2 = None
 
 class MoxTriangle:
     def __init__(self):
@@ -765,6 +765,11 @@ def add_marker_parameters(mox : MoxFile, marker_index : int, marker_objs : [], p
             
     if isinstance(prop, MarkerProperties):
         prop.set_parameters(marker_parameters)
+        
+def float_to_half(val):
+    f32 = struct.unpack('>I', struct.pack('>f', val))[0]
+    f16 = ((f32 >> 16) & 0x8000) | ((((f32 & 0x7f800000) - 0x38000000) >> 13) & 0x7c00) | ((f32 >> 13) & 0x03ff)
+    return f16
 
 def create_vertex(mox : MoxFile, vertex_index : int, bm, vertices : {}, uvs1 : {}, uvs2 : {}, landscape_scale):
     mox_vertex = mox.vertices[vertex_index]
@@ -971,11 +976,17 @@ def retrieve_part(mox : MoxFile, native_part : NativePart, source_materials : []
     mox_part.firstChunk = len(mox.chunks)
     
     chunk_triangle_indices = {}
-
+    
     mesh = temp_obj.data
 
     mesh.calc_loop_triangles()
     mesh.calc_normals_split()
+    
+    uv_layers = [uv_layer.name for uv_layer in mesh.uv_layers]
+    
+    for uv_index in range(min(len(uv_layers), 2)):
+        uv_layer_name = uv_layers[uv_index]
+        mesh.calc_tangents(uvmap=uv_layer_name)
     
     has_material_slots = len(part_obj.material_slots) > 0
 
@@ -988,7 +999,6 @@ def retrieve_part(mox : MoxFile, native_part : NativePart, source_materials : []
         
         chunk_triangle_indices[material_slot_index].append(polygon_index)
         
-    #for material_slot_index, material_slot in enumerate(part_obj.material_slots):
     for material_slot_index in range(max(1, len(part_obj.material_slots))):
         source_triangle_indices = chunk_triangle_indices[material_slot_index]
         
@@ -1025,6 +1035,7 @@ def retrieve_part(mox : MoxFile, native_part : NativePart, source_materials : []
                     normal = loop.normal
             
                     mox_vertex = MoxVertex()
+                    mox_tangent = MoxTangent()
             
                     mox_vertex.positionX = position.x * landscape_scale
                     mox_vertex.positionY = position.z * landscape_scale
@@ -1034,19 +1045,35 @@ def retrieve_part(mox : MoxFile, native_part : NativePart, source_materials : []
                     mox_vertex.normalY = normal.z
                     mox_vertex.normalZ = normal.y
             
-                    if len(mesh.uv_layers) >= 1:
-                        source_uv1 = mesh.uv_layers[0].data[loop_index].uv
+                    for uv_index in range(min(len(uv_layers), 2)):
+                        uv_layer_name = uv_layers[uv_index]
+                        
+                        uv_layer = mesh.uv_layers.get(uv_layer_name)
+                        source_uv = uv_layer.data[loop_index].uv
+                        
+                        tangent = loop.tangent
                 
-                        mox_vertex.u1 = source_uv1[0]
-                        mox_vertex.v1 = -source_uv1[1]
+                        tangent_x = tangent[0]
+                        tangent_y = tangent[1]
+                        tangent_z = tangent[2]
+                        bitangent_sign = loop.bitangent_sign
+                        
+                        np_tangents = np.array([tangent_x, tangent_z, tangent_y, bitangent_sign], dtype=np.float32)
+                        np_tangents_half = np_tangents.astype(np.float16)
                 
-                    if len(mesh.uv_layers) >= 2:
-                        source_uv2 = mesh.uv_layers[1].data[loop_index].uv
-                
-                        mox_vertex.u2 = source_uv2[0]
-                        mox_vertex.v2 = -source_uv2[1]
+                        if uv_index == 0:
+                            mox_vertex.u1 = source_uv[0]
+                            mox_vertex.v1 = -source_uv[1]
+                            
+                            mox_tangent.uv1 = np_tangents_half
+                        elif uv_index == 1:
+                            mox_vertex.u2 = source_uv[0]
+                            mox_vertex.v2 = -source_uv[1]
+                            
+                            mox_tangent.uv2 = np_tangents_half
                 
                     mox.vertices.append(mox_vertex)
+                    mox.tangents.append(mox_tangent)
             
                 vertex_indices.append(used_vertex_indices[source_vertex_index])
                 
@@ -1231,20 +1258,18 @@ def retrieve_marker(mox : MoxFile, marker_index : int, marker_objs : [], part_ob
     
 class ImportMox(Operator, ImportHelper):
     """This appears in the tooltip of the operator and in the generated docs"""
-    bl_idname = "import_landscape.object"  # important since its how bpy.ops.import_test.some_data is constructed
+    bl_idname = "import_landscape.object"
     bl_label = "Import Object"
-
-    # ImportHelper mixin class uses this
+    
     filename_ext = ".mox"
 
     filter_glob: StringProperty(
         default="*.mox",
         options={'HIDDEN'},
-        maxlen=255,  # Max internal buffer length, longer would be clamped.
+        maxlen=255
     )
 
-    # List of operator properties, the attributes will be assigned
-    # to the class instance from the operator settings before calling.
+
     use_setting: BoolProperty(
         name="Example Boolean",
         description="Example Tooltip",
@@ -1359,16 +1384,15 @@ class ImportMox(Operator, ImportHelper):
     
 class ExportMox(Operator, ExportHelper):
     """This appears in the tooltip of the operator and in the generated docs"""
-    bl_idname = "export_landscape.object"  # important since its how bpy.ops.import_test.some_data is constructed
+    bl_idname = "export_landscape.object"
     bl_label = "Export Object"
 
-    # ImportHelper mixin class uses this
     filename_ext = ".mox"
 
     filter_glob: StringProperty(
         default="*.mox",
         options={'HIDDEN'},
-        maxlen=255,  # Max internal buffer length, longer would be clamped.
+        maxlen=255
     )
 
     use_triangulate: BoolProperty(
@@ -1381,8 +1405,8 @@ class ExportMox(Operator, ExportHelper):
         name="Version",
         description="Target MOX version",
         items=(
-            ('3', "3", "Newest format with embedded tangent data and enhanced markers. Not compatible with games before CT5"),
-            ('2', "2", "Older format used by games before CT5. Also required for some models such as drivers")
+            ('3', "2.03", "Newest format with embedded tangent data and enhanced markers. Not compatible with games before CT5"),
+            ('2', "2.02", "Older format used by games before CT5. Also required for some models such as drivers")
         ),
         default='3',
     )
@@ -1434,7 +1458,7 @@ class ExportMox(Operator, ExportHelper):
             retrieve_part(mox, native_part, source_materials, part_objs, self.use_triangulate)
         
         use_big_indices = len(mox.vertices) > 0xFFFF
-        use_tangents = len(mox.tangents) > 0
+        use_tangents = mox.version == 0x0203 and len(mox.tangents) > 0
         
         options = 0
         options |= (int(use_big_indices) & 1) << 0
