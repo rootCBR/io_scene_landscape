@@ -771,7 +771,7 @@ def float_to_half(val):
     f16 = ((f32 >> 16) & 0x8000) | ((((f32 & 0x7f800000) - 0x38000000) >> 13) & 0x7c00) | ((f32 >> 13) & 0x03ff)
     return f16
 
-def create_vertex(mox : MoxFile, vertex_index : int, bm, vertices : {}, uvs1 : {}, uvs2 : {}, landscape_scale):
+def create_vertex_from_mox(mox : MoxFile, vertex_index : int, bm, vertices : {}, uvs1 : {}, uvs2 : {}, landscape_scale):
     mox_vertex = mox.vertices[vertex_index]
     vertex_position = Vector((mox_vertex.positionX, mox_vertex.positionZ, mox_vertex.positionY)) / landscape_scale
     vertex_normal = Vector((mox_vertex.normalX, mox_vertex.normalZ, mox_vertex.normalY))
@@ -807,9 +807,9 @@ def add_part(mox, part_index, parent_obj, material_data, part_objs : []):
         mox_chunk : MoxChunk = mox.chunks[i]
     
         for j in range(mox_chunk.firstTriangle, mox_chunk.firstTriangle + mox_chunk.triangleCount):
-            triangle = mox.triangles[j]
+            mox_triangle = mox.triangles[j]
             
-            vertex_indices = [triangle.vertexIndex3, triangle.vertexIndex2, triangle.vertexIndex1]
+            vertex_indices = [mox_triangle.vertexIndex3, mox_triangle.vertexIndex2, mox_triangle.vertexIndex1]
             
             if len(set(vertex_indices)) < 3:
                 print(f"triangle {j} is degenerate, vertices {vertex_indices}")
@@ -820,14 +820,14 @@ def add_part(mox, part_index, parent_obj, material_data, part_objs : []):
                     if vertex_index in vertices:
                         triangle_vertices[k] = vertices[vertex_index]
                     else:
-                        triangle_vertices[k] = create_vertex(mox, vertex_index, bm, vertices, uvs1, uvs2, landscape_scale)
+                        triangle_vertices[k] = create_vertex_from_mox(mox, vertex_index, bm, vertices, uvs1, uvs2, landscape_scale)
                     
                 face_vertices = (triangle_vertices[0], triangle_vertices[1], triangle_vertices[2])
             
                 if bm.faces.get(face_vertices):
                     print("face with vertices already exists:", vertex_indices);
                     for k, vertex_index in enumerate(vertex_indices):
-                        triangle_vertices[k] = create_vertex(mox, vertex_index, bm, vertices, uvs1, uvs2, landscape_scale)
+                        triangle_vertices[k] = create_vertex_from_mox(mox, vertex_index, bm, vertices, uvs1, uvs2, landscape_scale)
                     face_vertices = (triangle_vertices[0], triangle_vertices[1], triangle_vertices[2])
                 
                 face = bm.faces.new(face_vertices)

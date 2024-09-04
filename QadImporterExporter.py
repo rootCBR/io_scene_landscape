@@ -1,10 +1,11 @@
 import bpy
 import struct
+import bmesh
 
 from bpy_extras.io_utils import ImportHelper, ExportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty
 from bpy.types import Operator
-from mathutils import Vector
+from mathutils import Vector, Color
 
 from pathlib import Path
 
@@ -80,23 +81,61 @@ class GeoTriangle:
         self.VertexIndex1 = 0
         self.VertexIndex2 = 0
         self.VertexIndex3 = 0
+        
+def create_vertex_from_geo(geo : GeoFile, vertex_buffer_index : int, vertex_index : int, bm, vertices : {}, uvs1 : {}, uvs2 : {}, vertex_colors_blend : {}, vertex_colors_ambient : {}, landscape_scale):
+    vertex_buffer = geo.vertexBuffers[vertex_buffer_index]
+    geo_vertex : GeoVertex = vertex_buffer[vertex_index]
+    
+    vertex_position = Vector((geo_vertex.positionX, geo_vertex.positionZ, geo_vertex.positionY)) / landscape_scale
+    
+    normal = geo_vertex.normal
+    normalX = ((normal >> 16) & 0xFF) / 255;
+    normalY = ((normal >> 8) & 0xFF) / 255;
+    normalZ = ((normal >> 0) & 0xFF) / 255;
+    vertex_normal = Vector((normalX, normalZ, normalY))
+    
+    vertex_uv1 = (geo_vertex.u1, -geo_vertex.v1)
+    vertex_uv2 = (geo_vertex.u2, -geo_vertex.v2)
+    
+    blend = geo_vertex.blend
+    blendR = ((blend >> 24) & 0xFF) / 255;
+    blendG = ((blend >> 16) & 0xFF) / 255
+    blendB = ((blend >> 8) & 0xFF) / 255;
+    blendA = ((blend >> 0) & 0xFF) / 255;
+    vertex_color_blend = (blendR, blendG, blendB, blendA)
+    
+    ambient = geo_vertex.ambient
+    ambientR = ((ambient >> 24) & 0xFF) / 255;
+    ambientG = ((ambient >> 16) & 0xFF) / 255;
+    ambientB = ((ambient >> 8) & 0xFF) / 255;
+    ambientA = ((ambient >> 0) & 0xFF) / 255;
+    vertex_color_ambient = (ambientR, ambientG, ambientB, ambientA)
+    
+    vertex = bm.verts.new(vertex_position)
+    vertex.normal = vertex_normal
+    vertices[vertex_index] = vertex
+    
+    uvs1[vertex_index] = vertex_uv1
+    uvs2[vertex_index] = vertex_uv2
+    
+    vertex_colors_blend[vertex_index] = vertex_color_blend
+    vertex_colors_ambient[vertex_index] = vertex_color_ambient
+    
+    return vertex
 
 class ImportQad(Operator, ImportHelper):
     """This appears in the tooltip of the operator and in the generated docs"""
-    bl_idname = "import_landscape.scenario"  # important since its how bpy.ops.import_test.some_data is constructed
+    bl_idname = "import_landscape.scenario"
     bl_label = "Import Scenario"
 
-    # ImportHelper mixin class uses this
     filename_ext = ".qad"
 
     filter_glob: StringProperty(
         default="*.qad",
         options={'HIDDEN'},
-        maxlen=255,  # Max internal buffer length, longer would be clamped.
+        maxlen=255
     )
 
-    # List of operator properties, the attributes will be assigned
-    # to the class instance from the operator settings before calling.
     use_setting: BoolProperty(
         name="Example Boolean",
         description="Example Tooltip",
@@ -327,15 +366,23 @@ class ImportQad(Operator, ImportHelper):
 
         materials = []
         
-        vertices = []
-        normals = []
-        uvs1 = []
-        uvs2 = []
-        triangles = []
+        landscape_scale = 10.0
         
-        triangleMaterials = []
+        bm = bmesh.new()
+    
+        uv_layer1 = bm.loops.layers.uv.new("UV1")
+        uv_layer2 = bm.loops.layers.uv.new("UV2")
         
-        mesh = bpy.data.meshes.new(name="ImportedMesh")
+        color_layer_blend = bm.loops.layers.color.new("Blend")
+        color_layer_ambient = bm.loops.layers.color.new("Ambient")
+    
+        vertex_dicts = {}
+        uvs1_dicts = {}
+        uvs2_dicts = {}
+        vertex_colors_blend_dicts = {}
+        vertex_colors_ambient_dicts = {}
+
+        part_material_indices = []
         
         for i in range(len(qad.materials)):
             qadMaterial = qad.materials[i]
@@ -384,96 +431,101 @@ class ImportQad(Operator, ImportHelper):
             material.node_tree.links.new(tex_node.outputs[0], principled_BSDF.inputs[0])
         
             materials.insert(i, material)
-            mesh.materials.append(material)
         
-        for i in range(len(qad.quads)):
-            quad = qad.quads[i]
-            print("Iterating quad", i)
+        for h in range(len(qad.quads)):
+            qad_quad : QadQuad = qad.quads[h]
+            print("Iterating quad", h)
             
-            vertexBufferIndex = quad.vertexBufferIndex
-            vertexBuffer = geo.vertexBuffers[vertexBufferIndex]
+            vertex_buffer_index = qad_quad.vertexBufferIndex
             
-            vertexIndexDict = {}
-            
-            for j in range(quad.firstChunk, quad.firstChunk + quad.numChunks):
-                chunk = qad.chunks[j]
+            if vertex_buffer_index not in vertex_dicts:
+                vertex_dicts[vertex_buffer_index] = {}
+                
+            if vertex_buffer_index not in uvs1_dicts:
+                uvs1_dicts[vertex_buffer_index] = {}
+                
+            if vertex_buffer_index not in uvs2_dicts:
+                uvs2_dicts[vertex_buffer_index] = {}
+                
+            if vertex_buffer_index not in vertex_colors_blend_dicts:
+                vertex_colors_blend_dicts[vertex_buffer_index] = {}
+                
+            if vertex_buffer_index not in vertex_colors_ambient_dicts:
+                vertex_colors_ambient_dicts[vertex_buffer_index] = {}
+                
+            vertices = vertex_dicts[vertex_buffer_index]
+            uvs1 = uvs1_dicts[vertex_buffer_index]
+            uvs2 = uvs2_dicts[vertex_buffer_index]
+            vertex_colors_blend = vertex_colors_blend_dicts[vertex_buffer_index]
+            vertex_colors_ambient = vertex_colors_ambient_dicts[vertex_buffer_index]
+        
+            for i in range(qad_quad.firstChunk, qad_quad.firstChunk + qad_quad.numChunks):
+                qad_chunk : QadChunk = qad.chunks[i]
                 #print("Iterating chunk", j)
                 
-                for k in range(chunk.firstFace, chunk.firstFace + chunk.numFaces):
-                    triangle = geo.triangles[k]
-                    #print("Iterating triangle", k)
+                for j in range(qad_chunk.firstFace, qad_chunk.firstFace + qad_chunk.numFaces):
+                    qad_triangle = geo.triangles[j]
+                    #print("Iterating triangle", j)
                     
-                    vertexIds = [triangle.vertexIndex1, triangle.vertexIndex2, triangle.vertexIndex3]
-                    triangleVertexIds = []
-                    
-                    for l in range(len(vertexIds)):
-                        vertexId = vertexIds[2 - l]
-                        
-                        if vertexId not in vertexIndexDict:
-                            vertex = vertexBuffer[vertexId]
-                            
-                            vertexPositionVector = Vector((vertex.positionX / landscapeScale, vertex.positionZ / landscapeScale, vertex.positionY / landscapeScale))
-                            
-                            vertexUv1 = (vertex.u1, -vertex.v1)
-                            vertexUv2 = (vertex.u2, -vertex.v2)
-                            
-                            uvs1.append(vertexUv1)
-                            uvs2.append(vertexUv2)
-                            
-                            normal = vertex.normal
-                
-                            normalX = ((normal >> 16) & 0xFF) / 255;
-                            normalY = ((normal >> 8) & 0xFF) / 255;
-                            normalZ = ((normal >> 0) & 0xFF) / 255;
-                
-                            vertexNormalVector = (normalX, normalY, normalZ)
+                    vertex_indices = [qad_triangle.vertexIndex3, qad_triangle.vertexIndex2, qad_triangle.vertexIndex1]
+            
+                    if len(set(vertex_indices)) < 3:
+                        print(f"triangle {j} is degenerate, vertices {vertex_indices}")
+                    else:
+                        triangle_vertices = list(range(3))
 
-                            normals.append(vertexNormalVector)
-                            
-                            vertexIndexDict[vertexId] = len(vertices)
+                        for k, vertex_index in enumerate(vertex_indices):
+                            if vertex_index in vertices:
+                                triangle_vertices[k] = vertices[vertex_index]
+                            else:
+                                triangle_vertices[k] = create_vertex_from_geo(geo, vertex_buffer_index, vertex_index, bm, vertices, uvs1, uvs2, vertex_colors_blend, vertex_colors_ambient, landscape_scale)
                     
-                            vertices.append(vertexPositionVector)
-                            
-                        triangleVertexId = vertexIndexDict[vertexId]
-                        
-                        triangleVertexIds.insert(l, triangleVertexId)
-                        
-                    triangles.append(triangleVertexIds)
-
-                    triangleMaterials.append(chunk.materialIndex)
+                        face_vertices = (triangle_vertices[0], triangle_vertices[1], triangle_vertices[2])
+            
+                        if bm.faces.get(face_vertices):
+                            print("face with vertices already exists:", vertex_indices);
+                            for k, vertex_index in enumerate(vertex_indices):
+                                triangle_vertices[k] = create_vertex_from_geo(geo, vertex_buffer_index, vertex_index, bm, vertices, uvs1, uvs2, vertex_colors_blend, vertex_colors_ambient, landscape_scale)
+                            face_vertices = (triangle_vertices[0], triangle_vertices[1], triangle_vertices[2])
+                
+                        face = bm.faces.new(face_vertices)
         
-        obj = bpy.data.objects.new("ImportedObject", mesh)
+                        face.smooth = True
+        
+                        for k, loop in enumerate(face.loops):
+                            vertex_index = vertex_indices[k]
+                            
+                            loop[uv_layer1].uv = uvs1[vertex_index]
+                            loop[uv_layer2].uv = uvs2[vertex_index]
+                            
+                            loop[color_layer_blend] = vertex_colors_blend[vertex_index]
+                            loop[color_layer_ambient] = vertex_colors_ambient[vertex_index]
+
+                        face.material_index = len(part_material_indices)
+                
+                part_material_indices.append(qad_chunk.materialIndex)
+                    
+        bm.verts.ensure_lookup_table()
+        bm.faces.ensure_lookup_table()
+    
+        mesh = bpy.data.meshes.new(name=f"Scenario Mesh")
+        obj = bpy.data.objects.new("Scenario", mesh)
+        
         bpy.context.collection.objects.link(obj)
-        mesh.from_pydata(vertices, [], triangles)
         
-        uvLayer1 = mesh.uv_layers.new(name="UV1")
-        uvLayer2 = mesh.uv_layers.new(name="UV2")
+        bm.to_mesh(mesh)
+        bm.free()
         
-        #obj.data.use_auto_smooth = True
-        
-        #mesh.update()
-        
-        #normals = [(0.0, 0.0, 1.0) for _ in obj.data.vertices]
+        for i in range(len(part_material_indices)):
+            part_material_index = part_material_indices[i]
+            part_material = materials[part_material_index]
+            mesh.materials.append(part_material)
+            #print(f"part material {i} -> index {part_material_index}")
 
-        for polygon in obj.data.polygons:
-            polygonIndex = polygon.index
-            polygon.material_index =  triangleMaterials[polygonIndex]
-            
-            for loop_idx in polygon.loop_indices:
-                vert_idx = obj.data.loops[loop_idx].vertex_index
-                uv1 = uvs1[vert_idx]
-                uv2 = uvs2[vert_idx]
-                uvLayer1.data[loop_idx].uv = uv1
-                uvLayer2.data[loop_idx].uv = uv2
-                
-                #normal = normals[vert_idx]
-
-                #loop = mesh.loops[loop_idx]
-                #loop.normal = normal
-            
-        #mesh.normals_split_custom_set_from_vertices(normals)
-            
-        mesh.update()
+        mesh.normals_split_custom_set_from_vertices([v.normal for v in mesh.vertices])
+    
+        mesh.use_auto_smooth = True
+    
         mesh.update()
         
         print("ImportQad.execute() OUT")
