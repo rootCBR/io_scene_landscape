@@ -775,8 +775,8 @@ def create_vertex_from_mox(mox : MoxFile, vertex_index : int, bm, vertices : {},
     mox_vertex = mox.vertices[vertex_index]
     vertex_position = Vector((mox_vertex.positionX, mox_vertex.positionZ, mox_vertex.positionY)) / landscape_scale
     vertex_normal = Vector((mox_vertex.normalX, mox_vertex.normalZ, mox_vertex.normalY))
-    vertex_uv1 = (mox_vertex.u1, -mox_vertex.v1)
-    vertex_uv2 = (mox_vertex.u2, -mox_vertex.v2)
+    vertex_uv1 = (mox_vertex.u1, -mox_vertex.v1 + 1.0)
+    vertex_uv2 = (mox_vertex.u2, -mox_vertex.v2 + 1.0)
                       
     vertex = bm.verts.new(vertex_position)
     vertex.normal = vertex_normal
@@ -1024,15 +1024,53 @@ def retrieve_part(mox : MoxFile, native_part : NativePart, source_materials : []
 
             for loop_index in polygon.loop_indices:
                 loop = mesh.loops[loop_index]
+                
                 source_vertex_index = loop.vertex_index
                 
-                if source_vertex_index not in used_vertex_indices:
-                    source_vertex = mesh.vertices[source_vertex_index]
+                source_vertex = mesh.vertices[source_vertex_index]
+                
+                position = source_vertex.co
+                normal = loop.normal
+                
+                u1 = None
+                v1 = None
+                u2 = None
+                v2 = None
+                
+                t1 = None
+                t2 = None
+                
+                for uv_index in range(min(len(uv_layers), 2)):
+                    uv_layer_name = uv_layers[uv_index]
+                        
+                    uv_layer = mesh.uv_layers.get(uv_layer_name)
+                    source_uv = uv_layer.data[loop_index].uv
                     
-                    used_vertex_indices[source_vertex_index] = len(mox.vertices)
-            
-                    position = source_vertex.co
-                    normal = loop.normal
+                    tangent = loop.tangent
+                
+                    tangent_x = tangent[0]
+                    tangent_y = tangent[1]
+                    tangent_z = tangent[2]
+                    bitangent_sign = loop.bitangent_sign
+                        
+                    np_tangents = np.array([tangent_x, tangent_z, tangent_y, bitangent_sign], dtype=np.float32)
+                    np_tangents_half = np_tangents.astype(np.float16)
+                    
+                    if uv_index == 0:
+                        u1 = source_uv[0]
+                        v1 = -source_uv[1] + 1.0
+                            
+                        t1 = np_tangents_half
+                    elif uv_index == 1:
+                        u2 = source_uv[0]
+                        v2 = -source_uv[1] + 1.0
+                            
+                        t2 = np_tangents_half
+                
+                vertex_key = (tuple(position), (u1, v1, u2, v2), tuple(normal))
+                
+                if vertex_key not in used_vertex_indices:
+                    used_vertex_indices[vertex_key] = len(mox.vertices)
             
                     mox_vertex = MoxVertex()
                     mox_tangent = MoxTangent()
@@ -1045,37 +1083,19 @@ def retrieve_part(mox : MoxFile, native_part : NativePart, source_materials : []
                     mox_vertex.normalY = normal.z
                     mox_vertex.normalZ = normal.y
             
-                    for uv_index in range(min(len(uv_layers), 2)):
-                        uv_layer_name = uv_layers[uv_index]
-                        
-                        uv_layer = mesh.uv_layers.get(uv_layer_name)
-                        source_uv = uv_layer.data[loop_index].uv
-                        
-                        tangent = loop.tangent
-                
-                        tangent_x = tangent[0]
-                        tangent_y = tangent[1]
-                        tangent_z = tangent[2]
-                        bitangent_sign = loop.bitangent_sign
-                        
-                        np_tangents = np.array([tangent_x, tangent_z, tangent_y, bitangent_sign], dtype=np.float32)
-                        np_tangents_half = np_tangents.astype(np.float16)
-                
-                        if uv_index == 0:
-                            mox_vertex.u1 = source_uv[0]
-                            mox_vertex.v1 = -source_uv[1]
+                    mox_vertex.u1 = u1
+                    mox_vertex.v1 = v1
+                    
+                    mox_vertex.u2 = u2
+                    mox_vertex.v2 = v2
                             
-                            mox_tangent.uv1 = np_tangents_half
-                        elif uv_index == 1:
-                            mox_vertex.u2 = source_uv[0]
-                            mox_vertex.v2 = -source_uv[1]
-                            
-                            mox_tangent.uv2 = np_tangents_half
+                    mox_tangent.uv1 = t1
+                    mox_tangent.uv2 = t2
                 
                     mox.vertices.append(mox_vertex)
                     mox.tangents.append(mox_tangent)
             
-                vertex_indices.append(used_vertex_indices[source_vertex_index])
+                vertex_indices.append(used_vertex_indices[vertex_key])
                 
             mox_triangle = MoxTriangle()
             mox_triangle.vertexIndex1 = vertex_indices[2]
@@ -1181,7 +1201,7 @@ def retrieve_marker(mox : MoxFile, marker_index : int, marker_objs : [], part_ob
             [input_matrix[3][0], input_matrix[3][1], input_matrix[3][2], input_matrix[3][3]]
         ]
         
-    print("matrix:", mox_marker.matrix)
+    #print("matrix:", mox_marker.matrix)
     
     marker_type_name = marker_obj.mox_marker_properties.type
     marker_type = MarkerType[marker_type_name].value
@@ -1193,7 +1213,7 @@ def retrieve_marker(mox : MoxFile, marker_index : int, marker_objs : [], part_ob
     if marker_part_obj in part_objs:
         marker_part_index = part_objs.index(marker_part_obj)
         mox_marker.partIndex = marker_part_index
-        print(f"marker {marker_index} -> part {marker_part_index}: {marker_part_obj.name}")
+        #print(f"marker {marker_index} -> part {marker_part_index}: {marker_part_obj.name}")
         
     group = marker_obj.mox_marker_properties
     

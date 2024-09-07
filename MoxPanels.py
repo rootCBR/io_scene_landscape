@@ -1,11 +1,11 @@
 import bpy
+import math
 
 from .MarkerProperties import *
 from .Markers import *
 from .MoxParts import *
 
 from mathutils import Vector
-import math
 
 part_type_enum = [
     (PartType.DISABLE.name, 'Disable', 'Description'),
