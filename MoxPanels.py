@@ -258,6 +258,3 @@ def unregister():
     bpy.utils.unregister_class(MoxPartProperties)
     bpy.utils.unregister_class(MoxMarkerProperties)
     bpy.utils.unregister_class(OBJECT_PT_mox)
-    
-if __name__ == "__main__":
-    register()

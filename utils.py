@@ -68,3 +68,19 @@ def compose_matrix(obj, scale_correction_factor=1.0):
     matrix = Matrix.LocRotScale(translation, quaternion, scale)
     
     return matrix
+
+def srgb_to_linear(x):
+    if x <= 0.04045 :
+        y = x * (1.0 / 12.92)  
+    elif  0.04045 < x <= 1 : 
+        y =  ((x+0.055)/1.055)**2.4
+ 
+    return y
+ 
+def linear_to_srgb(x):
+    if x <= 0.0031308:
+        y = x * 12.92
+    elif 0.0031308 < x <= 1 :
+        y = 1.055*x**(1/2.4) - 0.055
+ 
+    return y

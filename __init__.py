@@ -17,34 +17,38 @@ import sys
 import os
 import importlib
 
-from .MoxPanels import *
-from .MoxImporterExporter import *
-from .CpoImporterExporter import *
-from .QadImporterExporter import *
+from . import MoxPanels
+from . import QadPanels
+from . import MoxImporterExporter
+from . import CpoImporterExporter
+from . import QadImporterExporter
+from . import PlgImporterExporter
 
-def init():
-    MoxPanels.init()
-    
 def reload_modules():
     importlib.reload(MoxPanels)
+    importlib.reload(QadPanels)
     importlib.reload(MoxImporterExporter)
     importlib.reload(CpoImporterExporter)
     importlib.reload(QadImporterExporter)
+    importlib.reload(PlgImporterExporter)
     
 def register():
     MoxPanels.register()
+    QadPanels.register()
     MoxImporterExporter.register()
     CpoImporterExporter.register()
     QadImporterExporter.register()
+    PlgImporterExporter.register()
 
 def unregister():
     MoxPanels.unregister()
+    QadPanels.unregister()
     MoxImporterExporter.unregister()
     CpoImporterExporter.unregister()
     QadImporterExporter.unregister()
+    PlgImporterExporter.unregister()
     
 if __name__ == "__main__":
     register()
-    init()
     
     bpy.ops.import_landscape.object('INVOKE_DEFAULT')

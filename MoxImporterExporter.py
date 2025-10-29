@@ -12,7 +12,9 @@ from bpy.types import Operator
 from mathutils import Vector, Matrix
 from math import radians, degrees
 from typing import List
+
 from pathlib import Path
+from io import BufferedReader, BufferedWriter
 
 from .MoxPanels import *
 from .Markers import *
@@ -517,23 +519,18 @@ class MoxPart:
         self.z2 = 0.0
         self.options = 0
         self.w5 = 0
-    
-class MoxMarkerV3:
-    def __init__(self):
-        self.type = 0
-        self.extraOffset = 0
-        self.options = 0
-        self.partIndex = 0
-        self.matrix = []
-    
-class MoxMarker:
-    def __init__(self):
-        self.type = 0
-        self.color = 0
-        self.options = 0
-        self.partIndex = 0
-        self.matrix = []
        
+class MaterialDefinitionEntry:
+    def __init__(self):
+        pass
+
+class MtlFile:
+    def __init__(self):
+        pass
+    
+    def deserialize(self, file_path):
+        pass
+
 class MaterialData:
     def __init__(self):
         self.color_sets = []
@@ -582,7 +579,7 @@ def parse_header_line(header_line):
     """Parse the header line to extract ColSetInf values."""
     _, *colset_values = header_line.split()
     # Remove quotes from around values if present
-    return [strip_quotes(val) for val in colset_values]
+    return [val.strip('"') for val in colset_values]
 
 def parse_data_block(block):
     """Parse a block of text data into a dictionary with relevant types."""
@@ -603,7 +600,7 @@ def parse_data_block(block):
 
             if key in {'Diffuse', 'Ambient', 'Specular', 'Reflect2', 'Specular2', 'XDiffuse', 'XSpecular'}:
                 # Process color values as a list of integers
-                data[key] = [parse_hex_color(v) for v in values]
+                data[key] = [int(v, 16) for v in values]
             elif key in {'TexFlags', 'SpecProps', 'Fresnel', 'FallOff'}:
                 # Process other multi-value properties as lists of integers
                 data[key] = [int(v, 16) for v in values]
@@ -615,7 +612,7 @@ def parse_data_block(block):
                 data[key] = int(values[0])
             elif key in {'Tex1Name', 'Tex2Name', 'Tex3Name'}:
                 # Process texture names as strings without quotes
-                data[key] = strip_quotes(' '.join(values))
+                data[key] = ' '.join(values).strip('"')
             else:
                 # Process as a single string value if no special handling needed
                 data[key] = ' '.join(values)
@@ -642,7 +639,7 @@ def read_text_file_to_dicts(file_path):
     
     return header_values, parsed_data
 
-def addMarker(mox, marker_index, lens_flare_image, marker_objs):
+def addMarker(mox, marker_index, lens_flare_image, marker_objs, parent_obj, collection):
     marker = mox.markers[marker_index]
     marker_parameters = mox.markers[marker_index]
     
@@ -673,6 +670,7 @@ def addMarker(mox, marker_index, lens_flare_image, marker_objs):
     quaternion = swap_yz_axes_of_quaternion(matrix_quaternion)
     
     obj_axes = bpy.data.objects.new(f"Marker {marker_index}", None)
+    obj_axes.parent = parent_obj
     #obj.empty_display_type = 'IMAGE'
     obj_axes.empty_display_size = axes_size * axes_scale
     
@@ -687,7 +685,7 @@ def addMarker(mox, marker_index, lens_flare_image, marker_objs):
     obj_axes.rotation_quaternion = quaternion
     obj_axes.rotation_mode = 'XYZ'
     
-    bpy.context.collection.objects.link(obj_axes)
+    collection.objects.link(obj_axes)
     
 def add_marker_parameters(mox : MoxFile, marker_index : int, marker_objs : [], part_objs = []):
     marker : MoxMarkerV3 = mox.markers[marker_index]
@@ -787,7 +785,11 @@ def create_vertex_from_mox(mox : MoxFile, vertex_index : int, bm, vertices : {},
     
     return vertex
 
-def add_part(mox, part_index, parent_obj, material_data, part_objs : []):
+def add_part(mox, part_index, parent_obj, material_data, part_objs : [], collection):
+    print("")
+    print(f"part_index = {part_index}")
+    print(f"len(mox.parts) = {len(mox.parts)}")
+    
     mox_part = mox.parts[part_index]
     
     landscape_scale = 10.0
@@ -851,11 +853,10 @@ def add_part(mox, part_index, parent_obj, material_data, part_objs : []):
     
     part_objs[part_index] = obj
     
-    #print("")
-    #print("part index:", part_index)
     #print("part name:", obj.name)
     
-    bpy.context.collection.objects.link(obj)
+    #bpy.context.collection.objects.link(obj)
+    collection.objects.link(obj)
     
     bm.to_mesh(mesh)
     bm.free()
@@ -896,10 +897,12 @@ def add_part(mox, part_index, parent_obj, material_data, part_objs : []):
         obj.parent = parent_obj
 
     if mox_part.nextInLevel != -1:
-        add_part(mox, mox_part.nextInLevel, parent_obj, material_data, part_objs)
+        add_part(mox, mox_part.nextInLevel, parent_obj, material_data, part_objs, collection)
         
     if mox_part.child != -1:
-        add_part(mox, mox_part.child, obj, material_data, part_objs)
+        add_part(mox, mox_part.child, obj, material_data, part_objs, collection)
+        
+    return obj
         
 def retrieve_native_part(native_part : NativePart, part_index_ref : Ref):
     part_index_ref.increment()
@@ -907,7 +910,7 @@ def retrieve_native_part(native_part : NativePart, part_index_ref : Ref):
     native_part.index = part_index_ref.get() - 1
     
     for i, child_part_obj in enumerate(native_part.obj.children):
-        if child_part_obj.type == 'MESH' and (child_part_obj.select_get() and not child_part_obj.hide_select):
+        if child_part_obj.type == 'MESH' and child_part_obj.visible_get():
             child_mox_part = MoxPart()
             child_mox_part.name = child_part_obj.name
             child_native_part = NativePart(child_part_obj, child_mox_part, native_part, part_index_ref.get(), i)
@@ -1276,6 +1279,108 @@ def retrieve_marker(mox : MoxFile, marker_index : int, marker_objs : [], part_ob
     mox.markers.insert(marker_index, mox_marker)
     mox.markerParameters.insert(marker_index, mox_marker_parameters_final)
     
+def import_mox(moxFilePath, texture_folder_path, collection):
+    print("import_mox() IN")
+        
+    mox_file_name = moxFilePath.stem
+    mtlFilePath = moxFilePath.with_suffix(".mtl")
+    textureFolderPath = texture_folder_path
+    print("mox_file_name:", mox_file_name)
+    print("moxFilePath:", moxFilePath)
+    print("mtlFilePath:", mtlFilePath)
+    print("textureFolderPath:", textureFolderPath)
+        
+    addon_directory = Path(__file__).parent
+    
+    # Construct the full path to the image file
+    lens_flare_image_path = addon_directory / "lensflare.tga"
+    
+    mox = MoxFile()
+        
+    loaded_textures = {}
+
+    material_data = MaterialData()
+        
+    with moxFilePath.open('rb') as mox_reader:
+        mox.deserialize(mox_reader)
+            
+    part_objs = list(range(len(mox.parts)))
+    marker_objs = []
+        
+    if mtlFilePath.exists():
+        material_data.color_sets, material_data.material_definitions = read_text_file_to_dicts(mtlFilePath)
+        
+    for i in range(len(mox.materials)):
+        moxMaterial = mox.materials[i]
+
+        material = bpy.data.materials.new(name=f"{i} {moxMaterial.id:04x}")
+            
+        material.use_nodes = True
+        material.use_backface_culling = True
+            
+        material_definition = next((m for m in material_data.material_definitions if m.get('ID') == moxMaterial.id), None)
+            
+        if material_definition:
+            #print(f"material index {i} - id {moxMaterial.id:04x} -> {material_definition.get('ID'):04x}")
+            #print("material_definition:", material_definition)
+            
+            tex_property_names = ["Tex1Name", "Tex2Name", "Tex3Name"]
+            
+            tex_nodes = []
+            
+            material_output = material.node_tree.nodes.get('Material Output')
+            principled_BSDF = material.node_tree.nodes.get('Principled BSDF')
+            
+            for j in range(len(tex_property_names)):
+                tex_property_name = tex_property_names[j]
+                
+                tex_node = material.node_tree.nodes.new('ShaderNodeTexImage')
+                tex_nodes.insert(j, tex_node)
+                
+                if tex_property_name in material_definition:
+                    tex_name = material_definition[tex_property_name]
+                
+                    if tex_name:
+                        tex_file_path = textureFolderPath / tex_name
+            
+                        print("tex_name:", tex_name)
+
+                        loaded_texture = None
+
+                        if tex_name in loaded_textures:
+                            loaded_texture = loaded_textures[tex_name]
+                        else:
+                            if tex_file_path.exists():
+                                loaded_texture = bpy.data.images.load(str(tex_file_path))
+                                loaded_textures[tex_name] = loaded_texture
+                    
+                        if loaded_texture != None:
+                            tex_node.image = loaded_texture
+                
+            material.node_tree.links.new(tex_nodes[0].outputs[0], principled_BSDF.inputs[0])
+            
+        material_data.materials.insert(i, material)
+        
+    obj = bpy.data.objects.new(f"{mox_file_name}", None)
+    
+    add_part(mox, 0, obj, material_data, part_objs, collection)
+    
+    collection.objects.link(obj)
+    
+    lens_flare_image = bpy.data.images.load(str(lens_flare_image_path))
+        
+    #print("number of markers:", len(mox.markers))
+    
+    for i in range(len(mox.markers)):
+        addMarker(mox, i, lens_flare_image, marker_objs, obj, collection)
+            
+    for i in range(len(mox.markers)):
+        add_marker_parameters(mox, i, marker_objs, part_objs)
+            
+    print("import_mox() OUT")
+        
+    return obj
+    
 class ImportMox(Operator, ImportHelper):
     """This appears in the tooltip of the operator and in the generated docs"""
     bl_idname = "import_landscape.object"
@@ -1289,117 +1394,15 @@ class ImportMox(Operator, ImportHelper):
         maxlen=255
     )
 
-
-    use_setting: BoolProperty(
-        name="Example Boolean",
-        description="Example Tooltip",
-        default=True,
-    )
-
-    type: EnumProperty(
-        name="Example Enum",
-        description="Choose between two items",
-        items=(
-            ('OPT_A', "First Option", "Description one"),
-            ('OPT_B', "Second Option", "Description two"),
-        ),
-        default='OPT_A',
-    )
-
     def execute(self, context):
-        print("ImportMox.execute() IN")
-        moxFilePath = Path(self.filepath)
-        mtlFilePath = moxFilePath.with_suffix(".mtl")
-        textureFolderPath = moxFilePath.parent / "Textures" / "tga"
-        print("moxFilePath:", moxFilePath)
-        print("mtlFilePath:", mtlFilePath)
-        print("textureFolderPath:", textureFolderPath)
+        collection = bpy.context.collection
+        #bpy.context.scene.collection.children.link(collection)
         
-        addon_directory = Path(__file__).parent
-    
-        # Construct the full path to the image file
-        lens_flare_image_path = addon_directory / "lensflare.tga"
-    
-        mox = MoxFile()
+        mox_file_path = Path(self.filepath)
+        texture_folder_path = mox_file_path.parent / "Textures" / "tga"
         
-        loaded_textures = {}
-
-        material_data = MaterialData()
+        import_mox(mox_file_path, texture_folder_path, collection)
         
-        with moxFilePath.open('rb') as mox_reader:
-            mox.deserialize(mox_reader)
-            
-        part_objs = list(range(len(mox.parts)))
-        marker_objs = []
-        
-        if mtlFilePath.exists():
-            material_data.color_sets, material_data.material_definitions = read_text_file_to_dicts(mtlFilePath)
-        
-        for i in range(len(mox.materials)):
-            moxMaterial = mox.materials[i]
-
-            material = bpy.data.materials.new(name=f"{i} {moxMaterial.id:04x}")
-            
-            material.use_nodes = True
-            material.use_backface_culling = True
-            
-            material_definition = next((m for m in material_data.material_definitions if m.get('ID') == moxMaterial.id), None)
-            
-            if material_definition:
-                #print(f"material index {i} - id {moxMaterial.id:04x} -> {material_definition.get('ID'):04x}")
-                #print("material_definition:", material_definition)
-            
-                tex_property_names = ["Tex1Name", "Tex2Name", "Tex3Name"]
-            
-                tex_nodes = []
-            
-                material_output = material.node_tree.nodes.get('Material Output')
-                principled_BSDF = material.node_tree.nodes.get('Principled BSDF')
-            
-                for j in range(len(tex_property_names)):
-                    tex_property_name = tex_property_names[j]
-                
-                    tex_node = material.node_tree.nodes.new('ShaderNodeTexImage')
-                    tex_nodes.insert(j, tex_node)
-                
-                    if tex_property_name in material_definition:
-                        tex_name = material_definition[tex_property_name]
-                
-                        if tex_name:
-                            tex_file_path = textureFolderPath / tex_name
-            
-                            print("tex_name:", tex_name)
-
-                            loaded_texture = None
-
-                            if tex_name in loaded_textures:
-                                loaded_texture = loaded_textures[tex_name]
-                            else:
-                                if tex_file_path.exists():
-                                    loaded_texture = bpy.data.images.load(str(tex_file_path))
-                                    loaded_textures[tex_name] = loaded_texture
-                    
-                            if loaded_texture != None:
-                                tex_node.image = loaded_texture
-                
-                material.node_tree.links.new(tex_nodes[0].outputs[0], principled_BSDF.inputs[0])
-            
-            material_data.materials.insert(i, material)
-                
-        add_part(mox, 0, None, material_data, part_objs)
-        
-        lens_flare_image = bpy.data.images.load(str(lens_flare_image_path))
-        
-        #print("number of markers:", len(mox.markers))
-        
-        for i in range(len(mox.markers)):
-            addMarker(mox, i, lens_flare_image, marker_objs)
-            
-        for i in range(len(mox.markers)):
-            add_marker_parameters(mox, i, marker_objs, part_objs)
-
-        print("ImportMox.execute() OUT")
-
         return {'FINISHED'}
     
 class ExportMox(Operator, ExportHelper):
@@ -1431,6 +1434,12 @@ class ExportMox(Operator, ExportHelper):
         default='3',
     )
 
+    write_material: BoolProperty(
+        name="Export materials",
+        description="Write .MTL file",
+        default=False,
+    )
+
     def execute(self, context):
         print("ExportMox.execute() IN")
         mox_file_path = Path(self.filepath)
@@ -1439,7 +1448,7 @@ class ExportMox(Operator, ExportHelper):
         print("mox_file_path:", mox_file_path)
         print("mtl_file_path:", mtl_file_path)
         print("texture_folder_path:", texture_folder_path)
-        
+                
         version = 0
         
         if self.mox_version == '3':
@@ -1458,11 +1467,29 @@ class ExportMox(Operator, ExportHelper):
         
         root_native_part = NativePart(None, None, None, -1, 0)
         
-        for obj in bpy.context.scene.objects:
-            if obj.type == 'MESH' and obj.parent is None and (obj.select_get() and not obj.hide_select):
-                root_objs.append(obj)
-                
+        #for obj in bpy.context.scene.objects:
+            #if obj.type == 'MESH' and obj.parent is None and (obj.select_get() and not obj.hide_select)):
+            #    root_objs.append(obj)
+            
+        root_obj = bpy.context.active_object
+        
+        if root_obj:
+            if root_obj.type == 'EMPTY':
+                for obj in root_obj.children:
+                    if obj.type == 'MESH':
+                       root_objs.append(obj)
+                       print(f"collecting object: {obj.name}")
+            elif root_obj.type == 'MESH':
+                root_objs.append(root_obj)
+        else:
+            for obj in bpy.context.scene.objects:
+                if obj.type == 'MESH':
+                   root_objs.append(obj)
+        
         for i, obj in enumerate(root_objs):
+            if not obj.visible_get():
+                continue
+            
             mox_part = MoxPart()
             mox_part.name = obj.name
             native_part = NativePart(obj, mox_part, root_native_part, part_index_ref.get(), i)
@@ -1487,10 +1514,13 @@ class ExportMox(Operator, ExportHelper):
         mox.options = options
         
         for obj in bpy.context.scene.objects:
-            if obj.type == 'EMPTY' and obj.parent is None and (obj.select_get() and not obj.hide_select):
+            if obj != root_obj and obj != obj.type == 'EMPTY':
                 marker_objs.append(obj)
             
         for i, obj in enumerate(marker_objs):
+            if not obj.visible_get():
+                continue
+            
             retrieve_marker(mox, i, marker_objs, part_objs)
             
         mox.materials = list(range(len(source_materials)))

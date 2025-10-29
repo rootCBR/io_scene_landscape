@@ -7,6 +7,22 @@ from enum import Enum
 from abc import ABC, abstractmethod
 from io import BufferedReader, BufferedWriter
 
+class MoxMarkerV3:
+    def __init__(self):
+        self.type = 0
+        self.extraOffset = 0
+        self.options = 0
+        self.partIndex = 0
+        self.matrix = []
+    
+class MoxMarker:
+    def __init__(self):
+        self.type = 0
+        self.color = 0
+        self.options = 0
+        self.partIndex = 0
+        self.matrix = []
+        
 class MarkerType(Enum):
     UNKNOWN = 0
     NITRO = 1                   # "Nitro"
