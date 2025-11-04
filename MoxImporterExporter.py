@@ -19,6 +19,7 @@ from io import BufferedReader, BufferedWriter
 from .MoxPanels import *
 from .Markers import *
 from .utils import *
+from .globals import *
 
 class MoxFile:
     def __init__(self):
@@ -869,7 +870,8 @@ def add_part(mox, part_index, parent_obj, material_data, part_objs : [], collect
         
     mesh.normals_split_custom_set_from_vertices([v.normal for v in mesh.vertices])
     
-    mesh.use_auto_smooth = True
+    if bpy.app.version < (4, 1, 0):
+        mesh.use_auto_smooth = True
     
     mesh.update()
 
@@ -983,7 +985,9 @@ def retrieve_part(mox : MoxFile, native_part : NativePart, source_materials : []
     mesh = temp_obj.data
 
     mesh.calc_loop_triangles()
-    mesh.calc_normals_split()
+    
+    if bpy.app.version < (4, 1, 0):
+        mesh.calc_normals_split()
     
     uv_layers = [uv_layer.name for uv_layer in mesh.uv_layers]
     

@@ -1,0 +1,19 @@
+schema_version = "1.0.0"
+
+id = "io_scene_landscape"
+version = "1.0.0"
+name = "Landscape"
+tagline = "Importer/exporter for 3D Landscape Engine assets"
+maintainer = "jsade"
+type = "add-on"
+
+website = "https://github.com/rootCBR/io_scene_landscape/"
+
+tags = ["Import-Export"]
+
+blender_version_min = "3.0.0"
+# blender_version_max = "5.1.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]

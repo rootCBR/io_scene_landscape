@@ -375,7 +375,7 @@ class QadMaterialProperties(bpy.types.PropertyGroup):
     
     texture_1_scale: bpy.props.FloatVectorProperty(
         name='Scale', 
-        description="Description",
+        description="Inverse texture scale",
         size=2,
         default=(1.0, 1.0),
         subtype='XYZ',
@@ -391,7 +391,7 @@ class QadMaterialProperties(bpy.types.PropertyGroup):
     
     texture_2_scale: bpy.props.FloatVectorProperty(
         name='Scale', 
-        description="Description",
+        description="Inverse texture scale",
         size=2,
         default=(1.0, 1.0),
         subtype='XYZ',

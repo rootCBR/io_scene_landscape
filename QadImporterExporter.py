@@ -19,6 +19,7 @@ from .QadTexturePropertyGroupPanels import *
 from .QadObjectLibraryPanels import *
 from .MoxImporterExporter import import_mox, swap_yz_axes_of_quaternion
 from .utils import *
+from .globals import *
 
 class QadMaterial:
     def __init__(self):
@@ -821,7 +822,7 @@ class GeoFile:
     def deserialize(self, reader : BufferedReader):
         print("GeoFile.deserialize()")
         
-        use_tangent_2 = True
+        use_tangent_2 = False # use 32 bit tangents
         
         readData_initial = struct.unpack('8I', reader.read(32))
             
@@ -1313,7 +1314,8 @@ class ImportQad(Operator, ImportHelper):
         
         mesh.normals_split_custom_set_from_vertices([v.normal for v in mesh.vertices])
     
-        mesh.use_auto_smooth = True
+        if bpy.app.version < (4, 1, 0):
+            mesh.use_auto_smooth = True
     
         mesh.update()
         

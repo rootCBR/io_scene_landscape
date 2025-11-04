@@ -597,7 +597,9 @@ class CData():
         mesh = self.scenario_obj.data
         
         mesh.calc_loop_triangles()
-        mesh.calc_normals_split()
+        
+        if bpy.app.version < (4, 1, 0):
+            mesh.calc_normals_split()
     
         uv_layers = [uv_layer.name for uv_layer in mesh.uv_layers]
     
@@ -659,14 +661,14 @@ class CData():
             face_mat_chunk.fmTxAngle[0] = 0
             face_mat_chunk.fmTxAngle[1] = 0
             
-            face_mat_chunk.fmTxOffsX[0] = int(qad_material_properties.texture_1_offset[0] * 100)
-            face_mat_chunk.fmTxOffsY[0] = int(qad_material_properties.texture_1_offset[1] * 100)
-            face_mat_chunk.fmTxScale[0] = int(qad_material_properties.texture_1_scale[0] * 100)
-            face_mat_chunk.fmTxScale[1] = int(qad_material_properties.texture_1_scale[1] * 100)
-            face_mat_chunk.fmTxOffsX2[0] = int(qad_material_properties.texture_2_offset[0] * 100)
-            face_mat_chunk.fmTxOffsY2[0] = int(qad_material_properties.texture_2_offset[1] * 100)
-            face_mat_chunk.fmTxScale2[0] = int(qad_material_properties.texture_2_scale[0] * 100)
-            face_mat_chunk.fmTxScale2[1] = int(qad_material_properties.texture_2_scale[1] * 100)
+            face_mat_chunk.fmTxOffsX[0] = round(qad_material_properties.texture_1_offset[0])
+            face_mat_chunk.fmTxOffsY[0] = round(qad_material_properties.texture_1_offset[1])
+            face_mat_chunk.fmTxScale[0] = round(qad_material_properties.texture_1_scale[0] * 100.0)
+            face_mat_chunk.fmTxScale[1] = round(qad_material_properties.texture_1_scale[1] * 100.0)
+            face_mat_chunk.fmTxOffsX2[0] = round(qad_material_properties.texture_2_offset[0])
+            face_mat_chunk.fmTxOffsY2[0] = round(qad_material_properties.texture_2_offset[1])
+            face_mat_chunk.fmTxScale2[0] = round(qad_material_properties.texture_2_scale[0] * 100.0)
+            face_mat_chunk.fmTxScale2[1] = round(qad_material_properties.texture_2_scale[1] * 100.0)
             
             textures = [
                 qad_material_properties.texture_1, 
@@ -704,14 +706,15 @@ class CData():
                         led_material.lmTexName1 = texture_name
                         led_material.lmTexPropGroup = int(texture_property_group)
                         
-                        bump_texture = bump_textures[j]
+                        if (j < len(bump_textures)):
+                            bump_texture = bump_textures[j]
                         
-                        if bump_texture:
-                            bump_image = bump_texture.image
+                            if bump_texture:
+                                bump_image = bump_texture.image
                             
-                            if bump_image:
-                                bump_texture_name = os.path.splitext(bump_image.name)[0]
-                                led_material.lmTexObj2 = bump_texture_name
+                                if bump_image:
+                                    bump_texture_name = os.path.splitext(bump_image.name)[0]
+                                    led_material.lmTexObj2 = bump_texture_name
                                 
                         self.LedMaterialsList.append(led_material)
             
@@ -735,13 +738,13 @@ class CData():
                 
                 source_vertex = mesh.vertices[source_vertex_index]
                 
-                u1 = None
-                v1 = None
-                u2 = None
-                v2 = None
+                u1 = 0.0
+                v1 = 0.0
+                u2 = 0.0
+                v2 = 0.0
                 
-                t1 = None
-                t2 = None
+                t1 = [0.0, 0.0, 0.0, 0.0]
+                t2 = [0.0, 0.0, 0.0, 0.0]
                 
                 for uv_index in range(min(len(uv_layers), 2)):
                     uv_layer_name = uv_layers[uv_index]
@@ -1147,41 +1150,43 @@ class CData():
                     ListPtr[j + Step + Start] = h
 
             Step >>= 1
-
+            
     def GenerateFaceTexMatrix(self, TheChunk, TheFace, Channel, LayerEdit = -1):
-        Modes = TxAngle = TxScale = TxOffsX = TxOffsY = TxScale2 = TxOffsX2 = TxOffsY2 = 0
+        #Modes = TxAngle = TxScale = TxOffsX = TxOffsY = TxScale2 = TxOffsX2 = TxOffsY2 = 0
         
         # 3
-        TestTxScale = self.TestTxScale
-        TestTxAngle = self.TestTxAngle
-        TestTxOffsetX = self.TestTxOffsetX
-        TestTxOffsetY = self.TestTxOffsetY
         
-        TestTxScale2 = self.TestTxScale2
-        TestTxOffsetX2 = self.TestTxOffsetX2
-        TestTxOffsetY2 = self.TestTxOffsetY2
+        # START ORIG?
+        # TestTxScale = self.TestTxScale
+        # TestTxAngle = self.TestTxAngle
+        # TestTxOffsetX = self.TestTxOffsetX
+        # TestTxOffsetY = self.TestTxOffsetY
         
-        if LayerEdit == 0:
-            Modes = TheFace.fmModesEd[Channel]
-            TxAngle = TestTxAngle
-            TxScale = TestTxScale
-            TxOffsX = TestTxOffsetX
-            TxOffsY = TestTxOffsetY
-        else:
-            Modes = TheFace.fmModes[Channel]
-            TxAngle = TheFace.fmTxAngle[Channel]
-            TxScale = TheFace.fmTxScale[Channel]
-            TxOffsX = TheFace.fmTxOffsX[Channel]
-            TxOffsY = TheFace.fmTxOffsY[Channel]
+        # TestTxScale2 = self.TestTxScale2
+        # TestTxOffsetX2 = self.TestTxOffsetX2
+        # TestTxOffsetY2 = self.TestTxOffsetY2
+        
+        # if LayerEdit == 0:
+        #     Modes = TheFace.fmModesEd[Channel]
+        #     TxAngle = TestTxAngle
+        #     TxScale = TestTxScale
+        #     TxOffsX = TestTxOffsetX
+        #     TxOffsY = TestTxOffsetY
+        # else:
+        #     Modes = TheFace.fmModes[Channel]
+        #     TxAngle = TheFace.fmTxAngle[Channel]
+        #     TxScale = TheFace.fmTxScale[Channel]
+        #     TxOffsX = TheFace.fmTxOffsX[Channel]
+        #     TxOffsY = TheFace.fmTxOffsY[Channel]
             
-        if LayerEdit == 1:
-            TxScale2 = TestTxScale2
-            TxOffsX2 = TestTxOffsetX2
-            TxOffsY2 = TestTxOffsetY2
-        else:
-            TxScale2 = TheFace.fmTxScale2[Channel]
-            TxOffsX2 = TheFace.fmTxOffsX2[Channel]
-            TxOffsY2 = TheFace.fmTxOffsY2[Channel]
+        # if LayerEdit == 1:
+        #     TxScale2 = TestTxScale2
+        #     TxOffsX2 = TestTxOffsetX2
+        #     TxOffsY2 = TestTxOffsetY2
+        # else:
+        #     TxScale2 = TheFace.fmTxScale2[Channel]
+        #     TxOffsX2 = TheFace.fmTxOffsX2[Channel]
+        #     TxOffsY2 = TheFace.fmTxOffsY2[Channel]
             
         # Channel &= 1
         
@@ -1238,6 +1243,64 @@ class CData():
         # Matrix2[1] = (-TxOffsY2 / 256.0 - Matrix[7] * A) % 1 # --- TODO
         
         # TheChunk.fcTexMod[Channel * 4:Channel * 4 + 4] = Matrix2 # --- TODO
+        # END ORIG?
+        
+        Modes = TheFace.fmModes[Channel]
+        TxAngle = TheFace.fmTxAngle[Channel]
+        TxScale = TheFace.fmTxScale[Channel]
+        TxOffsX = TheFace.fmTxOffsX[Channel]
+        TxOffsY = TheFace.fmTxOffsY[Channel]
+        TxScale2 = TheFace.fmTxScale2[Channel]
+        TxOffsX2 = TheFace.fmTxOffsX2[Channel]
+        TxOffsY2 = TheFace.fmTxOffsY2[Channel]
+        
+        # Matrix = TheChunk.fcTexMatrix[Channel * 8 : Channel * 8 + 8]
+        
+        # # Texmatrix, use x/z
+        # L = (TxScale - 100) / 20.0
+        # L = math.exp(L + math.log(2.0)) / 480.0
+        # A = TxAngle * 6.28318530718 / 360.0
+        
+        # # # (v) Proj X/Z
+        # # # U
+        # # Matrix[0] = math.cos(A) * L
+        # # Matrix[1] = 0.0
+        # # Matrix[2] = math.sin(A) * L
+        # # Matrix[3] = TxOffsX / 256.0
+        # # # V (negated)
+        # # Matrix[4] = math.sin(A) * L
+        # # Matrix[5] = 0.0
+        # # Matrix[6] = -math.cos(A) * L
+        # # Matrix[7] = -(TxOffsY / 256.0)
+        
+        # # (v) tex u1v1
+        # L = -(TxScale-128.0)/128.0
+        # L = math.pow(16.0,L)
+        # # U
+        # Matrix[0] = math.cos(A)*L
+        # Matrix[1] = math.sin(A)*L
+        # Matrix[2] = 0.0
+        # Matrix[3] = TxOffsX / 256.0
+        # # V (negated)
+        # Matrix[4] = -math.sin(A)*L
+        # Matrix[5] = math.cos(A)*L
+        # Matrix[6] = 0.0
+        # Matrix[7] = TxOffsY / 256.0
+        
+        # TheChunk.fcTexMatrix[Channel * 8:Channel * 8 + 8] = Matrix
+            
+        # Matrix2 = TheChunk.fcTexMod[Channel * 4 : Channel * 4 + 4]
+        # A = (TxScale2 - 100) / 20.0
+        # A = math.exp(A * math.log(2.0) / 480.0)
+        # A /= L
+        # Matrix2[2] = A # Aspect-ratio ?
+        # Matrix2[3] = A
+        # Matrix2[0] = (TxOffsX2 / 256.0 - Matrix[3] * A) % 1
+        # Matrix2[1] = (-TxOffsY2 / 256.0 - Matrix[7] * A) % 1
+        
+        # TheChunk.fcTexMod[Channel * 4:Channel * 4 + 4] = Matrix2
+
+        TheChunk.fcTexMod[Channel * 4:Channel * 4 + 4] = [TxOffsX, TxOffsY, TxScale / 100.0, TxScale / 100.0]
         
         # "Pruefsumme" bilden
         CheckSum = Modes
@@ -1249,16 +1312,6 @@ class CData():
         CheckSum ^= TxOffsX2 << 8
         CheckSum ^= TxOffsY2 << 16
         TheChunk.fcTMCRC[Channel] = CheckSum
-        
-        # TODO
-        TheChunk.fcTexMod[0] = float(TheFace.fmTxOffsX[0]) / 100.0
-        TheChunk.fcTexMod[1] = float(TheFace.fmTxOffsY[0]) / 100.0
-        TheChunk.fcTexMod[2] = float(TheFace.fmTxScale[0]) / 100.0
-        TheChunk.fcTexMod[3] = float(TheFace.fmTxScale[1]) / 100.0
-        TheChunk.fcTexMod[4] = float(TheFace.fmTxOffsX2[0]) / 100.0
-        TheChunk.fcTexMod[5] = float(TheFace.fmTxOffsY2[0]) / 100.0
-        TheChunk.fcTexMod[6] = float(TheFace.fmTxScale2[0]) / 100.0
-        TheChunk.fcTexMod[7] = float(TheFace.fmTxScale2[1]) / 100.0
            
     def CollectVllPolys(self, Collected : [], CollNum_REF : [], Index : int, VertLinkList : []):
         Hash = Tri = 0
