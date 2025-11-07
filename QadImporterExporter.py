@@ -1356,6 +1356,8 @@ class ImportQad(Operator, ImportHelper):
             object_ref = object_instances[qad_object_data_name]
                 
             instance = create_instance_hierarchy(object_ref, object_instance_collection)
+            
+            instance.qad_object_properties.qad_object_dataset = f"{qad_placed_object.index}"
 
             instance.location = Vector((qad_placed_object.position_x, qad_placed_object.position_z, qad_placed_object.position_y)) / landscape_scale
             
@@ -1474,11 +1476,17 @@ class ExportQad(Operator, ExportHelper):
             geo_version = 0x00010004
         
         root_objs = []
+        placed_objs = []
         
-        for obj in bpy.context.scene.objects:
-            if obj.type == 'MESH' and obj.parent is None and (obj.select_get() and not obj.hide_select):
-                root_objs.append(obj)
+        for obj in bpy.context.scene.collection.all_objects:
+            if obj.parent is None and (obj.select_get() and not obj.hide_select):
+                if hasattr(obj, "qad_object_properties") and obj.qad_object_properties.qad_object_dataset != "NONE":
+                    placed_objs.append(obj)
+                elif obj.type == 'MESH':
+                    root_objs.append(obj)
                 
+        print(f"placed_objs = {placed_objs}")
+                    
         ctx = bpy.context.copy()
 
         ctx['active_object'] = root_objs[0]
@@ -1490,7 +1498,7 @@ class ExportQad(Operator, ExportHelper):
         scenario_obj = ctx['active_object']
         
         c_data = CData()
-        c_data.LoadTerrainFile(context.scene, scenario_obj, landscape_scale)
+        c_data.LoadTerrainFile(context.scene, scenario_obj, placed_objs, landscape_scale)
         c_data.DoExportToXbox(False, True)
         
         BumpRemap = [0 for _ in range(c_data.TEXTURES_NUM)]

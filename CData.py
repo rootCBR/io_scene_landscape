@@ -13,6 +13,8 @@ from enum import Enum
 from .QadMaterials import MaterialType
 from .QadTexturePropertyGroupPanels import *
 from .QadMaterialPanels import *
+from .QadObjectPanels import *
+from .QadObjectLibraryPanels import *
 from .utils import *
 
 class SmpVertex:
@@ -266,6 +268,7 @@ class CollisionQuad:
 class CData():
     def __init__(self):
         self.scenario_obj = None
+        self.placed_objs = []
         self.landscape_scale = 1
         
         self.OBJECTS_NUM      = 6144
@@ -562,8 +565,9 @@ class CData():
             
         self.GenerateVertexRings()
         
-    def LoadTerrainFile(self, scene, scenario_obj, landscape_scale : int):
+    def LoadTerrainFile(self, scene, scenario_obj, placed_objs, landscape_scale : int):
         self.scenario_obj = scenario_obj
+        self.placed_objs = placed_objs
         self.landscape_scale = landscape_scale
         
         self.VxBuf1 = []
@@ -584,6 +588,9 @@ class CData():
         
         self.TexPropGroupsList = []
         self.TexPropGroupsNum = 0
+        
+        self.LedObjectPosList = []
+        self.LedObjectsSetNum = 0
         
         self.TexAniData = [TexAniItem() for _ in range(16)]
         
@@ -617,22 +624,83 @@ class CData():
             color_layer_ambient = mesh.vertex_colors["Specular"]
     
         # TODO
-        for i in range(1):
-            object_data = LedObject()
-            object_data.loObjName = "Einkaufswagen"
-            object_data.loObjectType = 0
-            object_data.loKickType = 3
-            object_data.loObjWeight = 0
-            object_data.loKickSound = "ko_metal_l"
-            object_data.loBounceSound = "ko_metal_l"
-            self.LedObjectsList.append(object_data)
+        
+        for i in range(len(placed_objs)):
+            placed_obj = placed_objs[i]
+            qad_object_properties : QadObjectProperties = placed_obj.qad_object_properties
             
-        # TODO
-        for i in range(1):
-            placed_object = LedObjectPos()
-            placed_object.lpObjName = "Einkaufswagen"
-            placed_object.lpObjIndex = 0
-            self.LedObjectPosList.append(placed_object)
+            print(f"scene.qad_object_data_list = {scene.qad_object_data_list}")
+            print(f"qad_object_properties.qad_object_dataset = {qad_object_properties.qad_object_dataset}")
+            
+            qad_object_data_properties : QadObjectDataProperties =  scene.qad_object_data_list[int(qad_object_properties.qad_object_dataset)]
+            
+            print(f"qad_object_data_properties = {qad_object_data_properties}")
+            
+            object_model_name = qad_object_data_properties.name
+            
+            print(f"object_model_name = {object_model_name}")
+            
+            data_index = next((i for i, item in enumerate(self.LedObjectsList) if item.loObjName == object_model_name), -1)
+            
+            if data_index == -1:
+                data_index = len(self.LedObjectsList)
+                qad_object_data = LedObject()
+                qad_object_data.loObjName = object_model_name
+                qad_object_data.loObjectType = qad_object_data_properties.type
+                qad_object_data.loKickType = qad_object_data_properties.kick_type
+                qad_object_data.loObjWeight = qad_object_data_properties.weight
+                qad_object_data.loKickSound = qad_object_data_properties.kick_sound
+                qad_object_data.loBounceSound = qad_object_data_properties.bounce_sound
+                self.LedObjectsList.append(qad_object_data)
+                
+            qad_placed_object = LedObjectPos()
+            qad_placed_object.lpObjName = object_model_name
+            qad_placed_object.lpObjIndex = data_index
+            
+            matrix = placed_obj.matrix_world.to_4x4()
+            
+            matrix_translation = matrix.to_translation()
+            matrix_quaternion  = matrix.to_3x3().to_quaternion()
+            matrix_scale = matrix.to_scale()
+    
+            translation = matrix_translation.copy()
+            scale = matrix_scale.copy()
+    
+            translation.x = matrix_translation.x
+            translation.y = matrix_translation.z
+            translation.z = matrix_translation.y
+    
+            scale.x = matrix_scale.x
+            scale.y = matrix_scale.z
+            scale.z = matrix_scale.y
+    
+            translation *= landscape_scale
+    
+            quaternion_b = swap_yz_axes_of_quaternion(matrix_quaternion)
+            quaternion = [quaternion_b.x, quaternion_b.y, quaternion_b.z, -quaternion_b.w]
+    
+            qad_placed_object.lpXpos = translation.x
+            qad_placed_object.lpYpos = translation.y
+            qad_placed_object.lpZpos = translation.z
+            qad_placed_object.lpOrientation = quaternion
+            
+            if (scale.x == scale.y == scale.z):
+                qad_placed_object.lpScale = scale.x
+            else:
+                qad_placed_object.lpScale = 1.0
+            
+            matrix3 = matrix.to_3x3().transposed()
+            
+            # TODO
+            qad_placed_object.lpObjMatrix = [
+                matrix3[0][0], matrix3[0][1], matrix3[0][2],
+                matrix3[1][0], matrix3[1][1], matrix3[1][2],
+                matrix3[2][0], matrix3[2][1], matrix3[2][2]
+                ]
+        
+            self.LedObjectPosList.append(qad_placed_object)
+            
+        self.LedObjectsSetNum = len(self.LedObjectPosList)
             
         default_texture_name = "01"
         led_default_material = LedMaterial()
@@ -1999,6 +2067,50 @@ class CData():
                     
         print(f"NumChunks: {self.FacesTexChunksNum2}")
         print(f" NumQuads: {self.QuadsNum}")
+
+	    # Objekte Quadranten zuordnen
+        if self.LedObjectsSetNum > 0:
+            ObjPosBup = [LedObjectPos() for _ in range(self.LedObjectsSetNum)]
+            ObjSortingList = [SortEntry() for _ in range(self.LedObjectsSetNum)]
+            
+            for i in range(self.LedObjectsSetNum):
+                ix = math.floor((self.LedObjectPosList[i].lpXpos / 1024.0))
+                iy = math.floor((self.LedObjectPosList[i].lpZpos / 1024.0))
+                ix += self.QuadsNumX >> 1
+                iy += self.QuadsNumY >> 1
+                
+                if ix < 0:
+                    ix = 0
+                
+                if ix >= self.QuadsNumX:
+                    ix = self.QuadsNumX - 1
+                
+                if iy >= self.QuadsNumY:
+                    iy = self.QuadsNumY - 1
+                    
+                ObjSortingList[i].PIndex = i
+                ObjSortingList[i].ZOffset = (iy << 16) | ix # Quadrant-ID
+                
+            # Sortieren
+            self.SortTheListQ(ObjSortingList, self.LedObjectsSetNum)
+            
+            # Umkopieren
+            for i in range(self.LedObjectsSetNum):
+                ObjPosBup[i] = self.LedObjectPosList[i]
+                
+            for i in range(self.LedObjectsSetNum):
+                self.LedObjectPosList[i] = ObjPosBup[ObjSortingList[i].PIndex]
+                
+            for i in range(self.LedObjectsSetNum):
+                ix = ObjSortingList[i].ZOffset & 0xffff
+                iy = ObjSortingList[i].ZOffset >> 16
+                
+                ix += iy * self.QuadsNumX
+                
+                if self.TerrainQuadList[ix].qiObject1 < 0:
+                    self.TerrainQuadList[ix].qiObject1 = i
+                
+                self.TerrainQuadList[ix].qiObjectsNum += 1
     
     def ResortVertices(self):
         i = i2 = c = 0
@@ -2496,7 +2608,7 @@ class CData():
                                     data_buffer.extend(struct.pack('H', qi))  # Graphics quad index
                                     triangles_added = True
                                     
-                                print(f"{i} - {self.TerrainQuadList[qi].qiStartIndex} = {i - self.TerrainQuadList[qi].qiStartIndex}")
+                                #print(f"{i} - {self.TerrainQuadList[qi].qiStartIndex} = {i - self.TerrainQuadList[qi].qiStartIndex}")
                                 data_buffer.extend(struct.pack('H', i - self.TerrainQuadList[qi].qiStartIndex))
 
                         if triangles_added:
