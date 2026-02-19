@@ -303,6 +303,19 @@ class MoxFile:
         for i in range(numberOfVertices):
             vertex = self.vertices[i]
             
+            if True:
+                print("vertex:", vertex)
+                print("vertex.positionX:", vertex.positionX)
+                print("vertex.positionY:", vertex.positionY)
+                print("vertex.positionZ:", vertex.positionZ)
+                print("vertex.normalX:", vertex.normalX)
+                print("vertex.normalY:", vertex.normalY)
+                print("vertex.normalZ:", vertex.normalZ)
+                print("vertex.u1:", vertex.u1)
+                print("vertex.v1:", vertex.v1)
+                print("vertex.u2:", vertex.u2)
+                print("vertex.v2:", vertex.v2)
+            
             writer.write(struct.pack("6f 4f", 
                 vertex.positionX, 
                 vertex.positionY, 
@@ -991,6 +1004,14 @@ def retrieve_part(mox : MoxFile, native_part : NativePart, source_materials : []
     
     uv_layers = [uv_layer.name for uv_layer in mesh.uv_layers]
     
+    uv_layer_count = len(uv_layers)
+    
+    has_uv2 = uv_layer_count > 1
+    
+    if not has_uv2:
+        has_uv2 = False
+        print("expected 2 UV maps, found", uv_layer_count)
+    
     for uv_index in range(min(len(uv_layers), 2)):
         uv_layer_name = uv_layers[uv_index]
         mesh.calc_tangents(uvmap=uv_layer_name)
@@ -1047,7 +1068,7 @@ def retrieve_part(mox : MoxFile, native_part : NativePart, source_materials : []
                 t1 = None
                 t2 = None
                 
-                for uv_index in range(min(len(uv_layers), 2)):
+                for uv_index in range(min(uv_layer_count, 2)):
                     uv_layer_name = uv_layers[uv_index]
                         
                     uv_layer = mesh.uv_layers.get(uv_layer_name)
@@ -1068,6 +1089,12 @@ def retrieve_part(mox : MoxFile, native_part : NativePart, source_materials : []
                         v1 = -source_uv[1] + 1.0
                             
                         t1 = np_tangents_half
+                        
+                        if not has_uv2:
+                            u2 = u1
+                            v2 = v1
+                            
+                            t2 = t1
                     elif uv_index == 1:
                         u2 = source_uv[0]
                         v2 = -source_uv[1] + 1.0

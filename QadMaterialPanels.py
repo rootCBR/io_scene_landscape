@@ -58,7 +58,7 @@ def build_default_shader(self, material, shader_node_items, bsdf_node, uv_layer_
 
 def build_shader_for_type_0(self, material, shader_node_items, bsdf_node, uv_layer_names):
     node_tree = material.node_tree
-    
+        
     qad_material_properties : QadMaterialProperties = material.qad_material_properties
 
     shader_node_item_1 : ShaderNodeItem = shader_node_items[0]
@@ -138,7 +138,7 @@ def build_shader_for_type_0(self, material, shader_node_items, bsdf_node, uv_lay
     node_tree.links.new(mix_node_bump_2.outputs['Color'], bsdf_node.inputs['Normal'])
     
     bsdf_node.inputs["Roughness"].default_value = 1.0
-    
+
     # TODO
     for texture_index, uv_layer_index in uv_layer_per_texture.items():
         uv_map_node = uv_map_nodes[texture_index]
@@ -178,7 +178,7 @@ def build_shader(self, material, uv_layer_names):
     material.use_nodes = True
     material.use_backface_culling = True
                
-    node_tree = material.node_tree     
+    node_tree = material.node_tree
     node_tree.nodes.clear()
     
     bsdf_node = node_tree.nodes.new(type="ShaderNodeBsdfPrincipled")
@@ -186,6 +186,7 @@ def build_shader(self, material, uv_layer_names):
     
     output_node = node_tree.nodes.new(type="ShaderNodeOutputMaterial")
     output_node.location = (1000, 0)
+    output_node.name = "output_custom"
     
     node_tree.links.new(bsdf_node.outputs["BSDF"], output_node.inputs["Surface"])
     
@@ -203,6 +204,7 @@ def build_shader(self, material, uv_layer_names):
         image = None
         texture_slot_index = 0
         node_name = ""
+        node_label = ""
 
         if texture:
             image = texture.image
@@ -210,9 +212,11 @@ def build_shader(self, material, uv_layer_names):
         if is_bump:
             texture_slot_index = j - len(textures)
             node_name = f"bump_texture_{texture_slot_index + 1}"
+            node_label = f"Bump Texture {texture_slot_index + 1}"
         else:
             texture_slot_index = j
             node_name = f"texture_{texture_slot_index + 1}"
+            node_label = f"Texture {texture_slot_index + 1}"
             
         shader_node_item : ShaderNodeItem = shader_node_items[texture_slot_index]
         shader_node_item.texture_index = texture_slot_index
@@ -221,6 +225,7 @@ def build_shader(self, material, uv_layer_names):
         tex_node.location = (-1000, -500 * j)
         tex_node.image = image
         tex_node.name = node_name
+        tex_node.label = node_label
             
         if is_bump:
             normal_node = node_tree.nodes.new('ShaderNodeNormalMap')
@@ -299,14 +304,57 @@ def update(self, context):
     if not hasattr(context, 'material'):
         return
     
-    build_shader(self, context.material)
+    obj = context.object
+    material = context.material
+    
+    uv_layer_names = None
+
+    if obj and obj.type == 'MESH':
+        uv_layer_names = [uv.name for uv in obj.data.uv_layers[:2]]
+    
+    build_shader(self, material, uv_layer_names)
     
 def update_type(self, context):
     update(self, context)
     
-def update_texture(self, context):
-    update(self, context)
-
+def update_texture(self, context, prop_name):
+    node_tree = context.material.node_tree
+    
+    if not node_tree.nodes.get("output_custom"):
+        update(self, context)
+        return
+    
+    tex_prop = getattr(self, prop_name)
+    
+    image = None
+    
+    if tex_prop:
+        image = tex_prop.image
+        
+    tex_node = node_tree.nodes.get(prop_name)
+    tex_node.image = image
+    
+def update_texture_1(self, context):
+    update_texture(self, context, "texture_1")
+    
+def update_texture_2(self, context):
+    update_texture(self, context, "texture_2")
+    
+def update_texture_3(self, context):
+    update_texture(self, context, "texture_3")
+    
+def update_texture_4(self, context):
+    update_texture(self, context, "texture_4")
+    
+def update_bump_texture_1(self, context):
+    update_texture(self, context, "bump_texture_1")
+    
+def update_bump_texture_2(self, context):
+    update_texture(self, context, "bump_texture_2")
+    
+def update_bump_texture_3(self, context):
+    update_texture(self, context, "bump_texture_3")
+    
 def update_tex_mod(self, context):
     update(self, context)
 
@@ -325,44 +373,44 @@ class QadMaterialProperties(bpy.types.PropertyGroup):
         name="Texture 1",
         type=bpy.types.Texture,
         description="Description",
-        update=update_texture
+        update=update_texture_1
     )
     texture_2: bpy.props.PointerProperty(
         name="Texture 2",
         type=bpy.types.Texture,
         description="Description",
-        update=update_texture
+        update=update_texture_2
     )
     texture_3: bpy.props.PointerProperty(
         name="Texture 3",
         type=bpy.types.Texture,
         description="Description",
-        update=update_texture
+        update=update_texture_3
     )
     texture_4: bpy.props.PointerProperty(
         name="Texture 4",
         type=bpy.types.Texture,
         description="Description",
-        update=update_texture
+        update=update_texture_4
     )
     
     bump_texture_1: bpy.props.PointerProperty(
         name="Bump Texture 1",
         type=bpy.types.Texture,
         description="Description",
-        update=update_texture
+        update=update_bump_texture_1
     )
     bump_texture_2: bpy.props.PointerProperty(
         name="Bump Texture 2",
         type=bpy.types.Texture,
         description="Description",
-        update=update_texture
+        update=update_bump_texture_2
     )
     bump_texture_3: bpy.props.PointerProperty(
         name="Bump Texture 3",
         type=bpy.types.Texture,
         description="Description",
-        update=update_texture
+        update=update_bump_texture_3
     )
     
     texture_1_offset: bpy.props.FloatVectorProperty(

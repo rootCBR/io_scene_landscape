@@ -701,6 +701,9 @@ class CData():
             self.LedObjectPosList.append(qad_placed_object)
             
         self.LedObjectsSetNum = len(self.LedObjectPosList)
+
+        if self.LedObjectsSetNum < 1:
+            raise Exception(f"Could not find a minimum of 1 placed object")
             
         default_texture_name = "01"
         led_default_material = LedMaterial()

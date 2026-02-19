@@ -1028,7 +1028,7 @@ class ImportQad(Operator, ImportHelper):
         print("qadFilePath:", qadFilePath)
         print("geoFilePath:", geoFilePath)
         print("textureFolderPath:", textureFolderPath)
-        
+    
         collection = bpy.context.collection
         
         object_reference_collection = bpy.data.collections.new("Object References")
