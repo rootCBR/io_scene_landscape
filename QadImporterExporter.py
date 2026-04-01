@@ -1,4 +1,5 @@
 import array
+from asyncio.windows_events import NULL
 import bpy
 import struct
 import bmesh
@@ -161,15 +162,17 @@ class QadFile:
         self.sounds = []
         self.stringSection = []
         
-    def deserialize(self, reader : BufferedReader):
+    def deserialize(self, reader : BufferedReader, qad_format_version : int):
         print("QadFile.deserialize()")
         
         signature = struct.unpack('I', reader.read(4))[0]
         
-        is_format_wr2 = False
-        is_format_ct1 = False
-
+        is_format_wr2 = qad_format_version == 1
+        is_format_ct0 = qad_format_version == 2
+        is_format_ct1 = qad_format_version == 3
         is_new_format = False
+        
+        print("qad_format_version:", qad_format_version)
         
         if signature == 0x51554144:
             is_new_format = True
@@ -244,19 +247,29 @@ class QadFile:
             print("numberOfTextureNames:", numberOfTextureNames)
             print("numberOfBumpTextureNames:", numberOfBumpTextureNames)
             print("numberOfObjectNames:", numberOfObjectNames)
+            print("numberOfPolygons:", numberOfPolygons)
             print("numberOfMaterials:", numberOfMaterials)
             print("numberOfPlacedObjects:", numberOfPlacedObjects)
+            print("numberOfTexturePropertyGroups:", numberOfTexturePropertyGroups)
             print("numberOfTexGroupIndices:", numberOfTexGroupIndices)
+            print("numberOfSounds:", numberOfSounds)
+            
+            print("marker_version:", marker_version)
+            print("number_of_markers:", number_of_markers)
 
         for i in range(numberOfTextureNames):
             readData_textureName = struct.unpack('32s', reader.read(32))
             textureName = readData_textureName[0].decode().rstrip('\x00')
             self.textureNames.insert(i, textureName)
+            
+            print(f"textureName = {textureName}")
                 
         for _ in range(numberOfBumpTextureNames):
             readData_bumpTextureName = struct.unpack('32s', reader.read(32))
             bumpTextureName = readData_bumpTextureName[0].decode().rstrip('\x00')
             self.bumpTextureNames.insert(i, bumpTextureName)
+            
+            print(f"bumpTextureName = {bumpTextureName}")
                 
         for i in range(numberOfObjectNames):
             readData_objectName = struct.unpack('32s', reader.read(32))
@@ -267,6 +280,8 @@ class QadFile:
             object_data.name = name_decoded
 
             self.object_data.append(object_data)
+            
+            print(f"object_data.name = {object_data.name}")
                 
         for i in range(numberOfObjectNames):
             readData_objectData = struct.unpack('2H 4I 48s 48s', reader.read(116))
@@ -329,16 +344,24 @@ class QadFile:
                 # texMatrix[8 * 3]
                 
                 material.texModCrcs = [ readData_material[28], readData_material[29], readData_material[30] ]
-            else:
+            elif is_format_ct0 or is_format_ct1:
+                readData_material = struct.unpack('4H 3h 1H 4f 4f 2L', reader.read(56))
+                
+                material.textureNameIndices = [ readData_material[0], readData_material[1], readData_material[2], readData_material[3] ]
+                material.bumpTextureNameIndices = [ readData_material[4], readData_material[5], readData_material[6] ]
+                material.materialType = readData_material[7]
+            
+                material.texMods = [ readData_material[8], readData_material[9], readData_material[10], readData_material[11], readData_material[12], readData_material[13], readData_material[14], readData_material[15] ]
+                material.texModCrcs = [ readData_material[16], readData_material[17] ]
+            elif is_new_format:
                 readData_material = struct.unpack('4H 3h 3H 4f 4f 2L', reader.read(60))
                 
                 material.textureNameIndices = [ readData_material[0], readData_material[1], readData_material[2], readData_material[3] ]
                 material.bumpTextureNameIndices = [ readData_material[4], readData_material[5], readData_material[6] ]
                 material.materialType = readData_material[7]
             
-                if is_new_format:
-                    material.textureAnimIndex = readData_material[8]
-                    _ = readData_material[9]
+                material.textureAnimIndex = readData_material[8]
+                _ = readData_material[9]
                 
                 material.texMods = [ readData_material[10], readData_material[11], readData_material[12], readData_material[13], readData_material[14], readData_material[15], readData_material[16], readData_material[17] ]
                 material.texModCrcs = [ readData_material[18], readData_material[19] ]
@@ -371,35 +394,42 @@ class QadFile:
         for i in range(numberOfPlacedObjects):
             placed_object = QadPlacedObject()
                 
-            if is_new_format or is_format_ct1:
-                readData_placedObject = struct.unpack('32s 2H 8f 9f 2H 1f', reader.read(112))
+            name_decoded = struct.unpack('32s', reader.read(32))[0].split(b'\x00')[0].decode('latin-1')
             
-                placed_object.name = readData_placedObject[0]
-                placed_object.index = readData_placedObject[1]
-                placed_object.path_flag = readData_placedObject[2]
-                placed_object.position_x = readData_placedObject[3]
-                placed_object.position_y = readData_placedObject[4]
-                placed_object.position_z = readData_placedObject[5]
-                placed_object.rotation_x = readData_placedObject[6]
-                placed_object.rotation_y = readData_placedObject[7]
-                placed_object.rotation_z = readData_placedObject[8]
-                placed_object.rotation_w = readData_placedObject[9]
-                placed_object.scale = readData_placedObject[10]
-                placed_object.matrix[0] = readData_placedObject[11]
-                placed_object.matrix[1] = readData_placedObject[12]
-                placed_object.matrix[2] = readData_placedObject[13]
-                placed_object.matrix[3] = readData_placedObject[14]
-                placed_object.matrix[4] = readData_placedObject[15]
-                placed_object.matrix[5] = readData_placedObject[16]
-                placed_object.matrix[6] = readData_placedObject[17]
-                placed_object.matrix[7] = readData_placedObject[18]
-                placed_object.matrix[8] = readData_placedObject[19]
-                placed_object.melted_flag = readData_placedObject[20]
-                placed_object.in_shadow = readData_placedObject[21]
-                placed_object.path_z = readData_placedObject[22]
-            else:
-                # TODO
-                readData_placedObject = struct.unpack('24I', reader.read(96))
+            placed_object.name = name_decoded
+            placed_object.index = struct.unpack('H', reader.read(2))[0]
+            
+            placed_object.path_flag = struct.unpack('H', reader.read(2))[0]
+            placed_object.position_x = struct.unpack('f', reader.read(4))[0]
+            placed_object.position_y = struct.unpack('f', reader.read(4))[0]
+            placed_object.position_z = struct.unpack('f', reader.read(4))[0]
+            placed_object.rotation_x = struct.unpack('f', reader.read(4))[0]
+            placed_object.rotation_y = struct.unpack('f', reader.read(4))[0]
+            placed_object.rotation_z = struct.unpack('f', reader.read(4))[0]
+            placed_object.rotation_w = struct.unpack('f', reader.read(4))[0]
+            placed_object.scale = struct.unpack('f', reader.read(4))[0]
+                
+            placed_object.matrix[0] = struct.unpack('f', reader.read(4))[0]
+            placed_object.matrix[1] = struct.unpack('f', reader.read(4))[0]
+            placed_object.matrix[2] = struct.unpack('f', reader.read(4))[0]
+            placed_object.matrix[3] = struct.unpack('f', reader.read(4))[0]
+            placed_object.matrix[4] = struct.unpack('f', reader.read(4))[0]
+                
+            if is_new_format or is_format_ct1:
+                placed_object.matrix[5] = struct.unpack('f', reader.read(4))[0]
+                placed_object.matrix[6] = struct.unpack('f', reader.read(4))[0]
+                placed_object.matrix[7] = struct.unpack('f', reader.read(4))[0]
+                placed_object.matrix[8] = struct.unpack('f', reader.read(4))[0]
+                
+            placed_object.melted_flag = struct.unpack('H', reader.read(2))[0]
+            placed_object.in_shadow = struct.unpack('H', reader.read(2))[0]
+            placed_object.path_z = struct.unpack('f', reader.read(4))[0]
+
+            if is_format_wr2 or is_format_ct0:
+                unk13 = struct.unpack('I', reader.read(4))[0]
+            
+            #print(f"placed_objects[{i}].name = {placed_object.name}")
+            #print(f"placed_objects[{i}].index = {placed_object.index}")
             
             self.placed_objects.append(placed_object)
             
@@ -949,7 +979,70 @@ class GeoFile:
             writer.write(struct.pack("H", 
                 self.indices[i],
             ))
+            
+class VtxFile:
+    def __init__(self):
+        self.bufferCount = 64
+        self.bufferVertexCounts = []
+        self.vertexBuffers = []
+        
+    def deserialize(self, reader : BufferedReader):
+        print("VtxFile.deserialize()")
+        
+        for i in range(self.bufferCount):
+            readData_bufferVertexCount = struct.unpack('I', reader.read(4))
+            bufferVertexCount = readData_bufferVertexCount[0]
+            self.bufferVertexCounts.insert(i, bufferVertexCount)
+            if False:
+                print("")
+                print("bufferVertexCount:", bufferVertexCount)
+                
+        for i in range(self.bufferCount):
+            vertices = []
+            for j in range(self.bufferVertexCounts[i]):
+                readData_vertex = struct.unpack('3f I 2f 2I', reader.read(32))
+                    
+                vertex = GeoVertex()
+                vertex.positionX = readData_vertex[0]
+                vertex.positionY = readData_vertex[1]
+                vertex.positionZ = readData_vertex[2]
+                vertex.normal = readData_vertex[3]
+                vertex.u1 = readData_vertex[4]
+                vertex.v1 = readData_vertex[5]
+                vertex.u2 = vertex.u1
+                vertex.v2 = vertex.v1
+                vertex.color = readData_vertex[6]
+                vertex.specular = readData_vertex[7]
+                vertices.insert(j, vertex)
+                        
+            self.vertexBuffers.insert(i, vertices)
+            
+        print("Done reading VTX")
+                
+class IdxFile:
+    def __init__(self):
+        self.indexCount = 0 # remove
+        self.triangles = [] # remove
+        
+    def deserialize(self, reader : BufferedReader):
+        print("IdxFile.deserialize()")
+        
+        self.indexCount = struct.unpack('I', reader.read(4))[0]
+            
+        if True:
+            print("indexCount:", self.indexCount)
 
+        for i in range(self.indexCount // 3):
+            readData_triangle = struct.unpack('3H', reader.read(6))
+                
+            triangle = GeoTriangle()
+            triangle.vertexIndex1 = readData_triangle[0]
+            triangle.vertexIndex2 = readData_triangle[1]
+            triangle.vertexIndex3 = readData_triangle[2]
+            self.triangles.insert(i, triangle)
+            
+        print("Done reading IDX")
+            
 def create_vertex_from_geo(geo : GeoFile, vertex_buffer_index : int, vertex_index : int, bm, vertices : {}, uvs1 : {}, uvs2 : {}, vertex_colors_blend : {}, vertex_colors_ambient : {}, landscape_scale):
     vertex_buffer = geo.vertexBuffers[vertex_buffer_index]
     geo_vertex : GeoVertex = vertex_buffer[vertex_index]
@@ -1004,26 +1097,24 @@ class ImportQad(Operator, ImportHelper):
         maxlen=255
     )
 
-    use_setting: BoolProperty(
-        name="Example Boolean",
-        description="Example Tooltip",
-        default=True,
-    )
-
-    type: EnumProperty(
-        name="Example Enum",
-        description="Choose between two items",
+    qad_format_version: EnumProperty(
+        name="QAD Version",
+        description="QAD file format version",
         items=(
-            ('OPT_A', "First Option", "Description one"),
-            ('OPT_B', "Second Option", "Description two"),
+            ('4', "4 (since CT2)", "QAD file format as used since Crash Time 2."),
+            ('3', "3 (CT1)", "QAD file format as used in Crash Time: Autobahn Pursuit."),
+            ('2', "2 (Nitro)", "QAD file format as used in Alarm for Cobra 11: Nitro."),
+            ('1', "1 (WR2)", "QAD file format as used in World Racing 2.")
         ),
-        default='OPT_A',
+        default='4',
     )
 
     def execute(self, context):
         print("ImportQad.execute() IN")
         qadFilePath = Path(self.filepath)
         geoFilePath = qadFilePath.with_suffix(".geo")
+        vtxFilePath = qadFilePath.with_suffix(".vtx")
+        idxFilePath = qadFilePath.with_suffix(".idx")
         textureFolderPath = qadFilePath.parent / "Textures" / "tga"
         print("qadFilePath:", qadFilePath)
         print("geoFilePath:", geoFilePath)
@@ -1037,15 +1128,32 @@ class ImportQad(Operator, ImportHelper):
         object_instance_collection = bpy.data.collections.new("Objects")
         collection.children.link(object_instance_collection)
         
+        qad_format_version = int(self.qad_format_version) or 4
+
         qad = QadFile()
         geo = GeoFile()
         
         with qadFilePath.open('rb') as qad_file:
-            qad.deserialize(qad_file)
-        
-        with geoFilePath.open('rb') as geo_file:
-            geo.deserialize(geo_file)
-        
+            qad.deserialize(qad_file, qad_format_version)
+
+        if qad_format_version == 1:
+            vtx = VtxFile()
+            idx = IdxFile()
+            
+            with vtxFilePath.open('rb') as vtx_file:
+                vtx.deserialize(vtx_file)
+                
+            with idxFilePath.open('rb') as idx_file:
+                idx.deserialize(idx_file)
+                
+            geo.bufferVertexCounts = vtx.bufferVertexCounts
+            geo.vertexBuffers = vtx.vertexBuffers
+            geo.indexCount = idx.indexCount
+            geo.triangles = idx.triangles
+        else:
+            with geoFilePath.open('rb') as geo_file:
+                geo.deserialize(geo_file)
+
         loaded_textures = {}
 
         materials = []
@@ -1124,10 +1232,11 @@ class ImportQad(Operator, ImportHelper):
                     if textureNameIndex != 0:
                         textureNames[j] = qad.textureNames[textureNameIndex]
                 
-                for j in range(len(qadMaterial.bumpTextureNameIndices)):
-                    bumpTextureNameIndex = qadMaterial.bumpTextureNameIndices[j]
-                    if bumpTextureNameIndex != -1:
-                        bumpTextureNames[j] = qad.bumpTextureNames[bumpTextureNameIndex]
+                if len(qad.bumpTextureNames) > 0:
+                    for j in range(len(qadMaterial.bumpTextureNameIndices)):
+                        bumpTextureNameIndex = qadMaterial.bumpTextureNameIndices[j]
+                        if bumpTextureNameIndex != -1:
+                            bumpTextureNames[j] = qad.bumpTextureNames[bumpTextureNameIndex]
                 
             if textureNames[0]:
                 material_name += f" {textureNames[0]}"
@@ -1444,14 +1553,13 @@ class ExportQad(Operator, ExportHelper):
         maxlen=255
     )
 
-    qad_version: EnumProperty(
+    qad_format_version: EnumProperty(
         name="Version",
-        description="Target QAD version",
+        description="Target QAD format version",
         items=(
-            ('3', "3", "Placeholder (CT5)"),
-            #('2', "2", "Placeholder (CT4)")
+            ('4', "4", "Placeholder (CT5)"),
         ),
-        default='3',
+        default='4',
     )
 
     def execute(self, context):
@@ -1467,13 +1575,6 @@ class ExportQad(Operator, ExportHelper):
         geo = GeoFile()
         
         landscape_scale = 10.0
-        
-        qad_version = 0
-        geo_version = 0
-
-        if self.qad_version == '3':
-            qad_version = 0x00010001
-            geo_version = 0x00010004
         
         root_objs = []
         placed_objs = []
@@ -1581,8 +1682,7 @@ class ExportQad(Operator, ExportHelper):
         # geo
         use_tangents = True # TODO
 
-        geo.version = geo_version
-        
+        geo.version = 0x00010004
         geo.bufferVertexCounts = [0 for _ in range(geo_buffer_count)]
         geo.vertexBuffers = [[] for _ in range(geo_buffer_count)]
         
@@ -1633,7 +1733,7 @@ class ExportQad(Operator, ExportHelper):
         #return {'FINISHED'} # TODO
     
         # qad
-        qad.version = qad_version
+        qad.version = 0x00010001
         qad.terrain_size_x = c_data.TerrainSizeX
         qad.terrain_size_y = c_data.TerrainSizeY
         qad.number_of_quads_x = c_data.QuadsNumX

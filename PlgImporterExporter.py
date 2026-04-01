@@ -285,46 +285,61 @@ class PlgChunk:
         self.density = 0
         self.size = 0
     
-def create_vertex_from_plg(plg : PlgFile, quad_index_x : int, quad_index_y : int, vertex_index : int, bm, vertices : {}, uvs1 : {}, uvs2 : {}, quad_size, landscape_scale):
-    plg_vertex : PlgVertex = plg.vertices[vertex_index]
-    
-    quad_index = quad_index_y * plg.number_of_quads_x + quad_index_x
-    
+def create_vertex_from_plg(plg : PlgFile, quad_index : int, vertex_index : int, bm, vertices : {}, uvs1 : {}, uvs2 : {}, quad_size, landscape_scale):
     quad : PlgQuad = plg.quads[quad_index]
-
-    qxMin = ((quad_index % plg.number_of_quads_x) - (plg.number_of_quads_x >> 1)) * 512.0
-    qzMin = ((quad_index % plg.number_of_quads_x) - (plg.number_of_quads_y >> 1)) * 512.0
     
+    plg_vertex : PlgVertex = plg.vertices[vertex_index]
+
+    # orig
+	#const float qxMin = (float) ((i % (int) mQuadsNumX) - (int) (mQuadsNumX >> 1)) * 512.0f;
+	#const float qzMin = (float) ((i / (int) mQuadsNumX) - (int) (mQuadsNumZ >> 1)) * 512.0f;
+	#const float qxMax = qxMin + 512.0f;
+	#const float qzMax = qzMin + 512.0f;
+    
+    qxMin = ((quad_index % plg.number_of_quads_x) - (plg.number_of_quads_x >> 1)) * 512.0
+    qzMin = ((quad_index // plg.number_of_quads_x) - (plg.number_of_quads_y >> 1)) * 512.0
+    
+    if False:
+        print("vertex_index:", vertex_index)
+        
     if False:
         print("")
         print("quad_index:", quad_index)
         print("qxMin:", qxMin)
         print("qzMin:", qzMin)
     
+    #orig
 	#int x = (int) floorf((src.xPos + 768.0f - qxMin) * (65535.0f / 2048.0f) + 0.5f);
 	#int y = (int) floorf((src.yPos - mQuads[i].yMin) * 65535.0f / (mQuads[i].yMax - mQuads[i].yMin) + 0.5f);
 	#int z = (int) floorf((src.zPos + 768.0f - qzMin) * (65535.0f / 2048.0f) + 0.5f);
     
-    #x = math.floor((plg_vertex.x + 768 - qxMin) * (65535 / 2048) + 0.5)
-    #y = math.floor((plg_vertex.y - quad.min_y) * 65535 / (quad.max_y - quad.min_y) + 0.5)
-    #z = math.floor((plg_vertex.z + 768 - qzMin) * (65535 / 2048) + 0.5)
-
     range_y = quad.max_y - quad.min_y
     
-    value_range = 65535
-    scale_xz = value_range / 2048
-    scale_y = value_range
-
-    x = (plg_vertex.x / scale_xz) + qxMin - 768
-    y = (plg_vertex.y / scale_y) * range_y + quad.min_y
-    z = (plg_vertex.z / scale_xz) + qzMin - 768
+    value_range = 65535.0
+    scale_xz = value_range / 2048.0
+    scale_y = value_range / range_y
+    
+    # v2
+    #x = (plg_vertex.x + qxMin - 768.0) / scale_xz
+    #y = (plg_vertex.y + quad.min_y) / scale_y
+    #z = (plg_vertex.z + qzMin - 768.0) / scale_xz
+    
+    # v3
+    x = (plg_vertex.x / scale_xz) + qxMin - 768.0
+    y = (plg_vertex.y / scale_y)  + quad.min_y
+    z = (plg_vertex.z / scale_xz) + qzMin - 768.0
+    
+    # llm (v4)
+    #float worldX = dst.xPos * (2048.0f / 65535.0f) + qxMin - 768.0f;
+    #float worldY = dst.yPos * (quad.yMax - quad.yMin) / 65535.0f + quad.yMin;
+    #float worldZ = dst.zPos * (2048.0f / 65535.0f) + qzMin - 768.0f;
     
     vertex_position = Vector((x, z, y)) / landscape_scale
     
-    normalX = plg_vertex.nx / 0xFF
-    normalY = plg_vertex.ny / 0xFF
-    normalZ = plg_vertex.nz / 0xFF
-    vertex_normal = Vector((normalX, normalZ, normalY))
+    normal_x = plg_vertex.nx / 0xFF
+    normal_y = plg_vertex.ny / 0xFF
+    normal_z = plg_vertex.nz / 0xFF
+    vertex_normal = Vector((normal_x, normal_z, normal_y))
     
     vertex_uv1 = (plg_vertex.u1, -plg_vertex.v1)
     vertex_uv2 = (plg_vertex.u2, -plg_vertex.v2)
@@ -351,22 +366,6 @@ class ImportPlg(Operator, ImportHelper):
         maxlen=255
     )
 
-    use_setting: BoolProperty(
-        name="Example Boolean",
-        description="Example Tooltip",
-        default=True,
-    )
-
-    type: EnumProperty(
-        name="Example Enum",
-        description="Choose between two items",
-        items=(
-            ('OPT_A', "First Option", "Description one"),
-            ('OPT_B', "Second Option", "Description two"),
-        ),
-        default='OPT_A',
-    )
-
     def execute(self, context):
         print("ImportPlg.execute() IN")
         
@@ -387,99 +386,103 @@ class ImportPlg(Operator, ImportHelper):
         landscape_scale = 10.0
         quad_size = 102.4
         
-        vertex_dicts = {}
-        uvs1_dicts = {}
-        uvs2_dicts = {}
+        for h in range(len(plg.quads)):
+            plg_quad : PlgQuad = plg.quads[h]
+            print("Iterating quad", h)
         
-        bm = bmesh.new()
-    
-        uv_layer1 = bm.loops.layers.uv.new("UV1")
-        uv_layer2 = bm.loops.layers.uv.new("UV2")
-        
-        mesh = bpy.data.meshes.new(name=f"Planting Mesh")
-        
-        #for h in range(len(plg.quads)):
-        for quad_index_x in range(plg.number_of_quads_x):
-            for quad_index_y in range(plg.number_of_quads_y):
-                # index = indexY * numberOfQuadsX + indexX
-                quad_index = quad_index_y * plg.number_of_quads_x + quad_index_x
+            vertex_dicts = {}
+            uvs1_dicts = {}
+            uvs2_dicts = {}
                 
-                plg_quad : PlgQuad = plg.quads[quad_index]
-                print("Iterating quad", quad_index)
+            bm = bmesh.new()
+        
+            uv_layer1 = bm.loops.layers.uv.new("UV1")
+            uv_layer2 = bm.loops.layers.uv.new("UV2")
+        
+            mesh = bpy.data.meshes.new(name=f"Planting Mesh {h}")
+        
+            vertex_buffer_index = 0
             
-                vertex_buffer_index = 0
+            if vertex_buffer_index not in vertex_dicts:
+                vertex_dicts[vertex_buffer_index] = {}
+                
+            if vertex_buffer_index not in uvs1_dicts:
+                uvs1_dicts[vertex_buffer_index] = {}
+                
+            if vertex_buffer_index not in uvs2_dicts:
+                uvs2_dicts[vertex_buffer_index] = {}
+                
+            vertices = vertex_dicts[vertex_buffer_index]
+            uvs1 = uvs1_dicts[vertex_buffer_index]
+            uvs2 = uvs2_dicts[vertex_buffer_index]
             
-                if vertex_buffer_index not in vertex_dicts:
-                    vertex_dicts[vertex_buffer_index] = {}
+            for i in range(0, plg_quad.chunk_count):
+                chunk_index = plg_quad.chunk_offset + i
+                vertex_offset = plg_quad.vertex_offset
                 
-                if vertex_buffer_index not in uvs1_dicts:
-                    uvs1_dicts[vertex_buffer_index] = {}
+                plg_chunk : PlgChunk = plg.chunks[chunk_index]
+                #print("Iterating chunk", chunk_index)
                 
-                if vertex_buffer_index not in uvs2_dicts:
-                    uvs2_dicts[vertex_buffer_index] = {}
-                
-                vertices = vertex_dicts[vertex_buffer_index]
-                uvs1 = uvs1_dicts[vertex_buffer_index]
-                uvs2 = uvs2_dicts[vertex_buffer_index]
-        
-                for i in range(plg_quad.chunk_offset, plg_quad.chunk_offset + plg_quad.chunk_count):
-                    plg_chunk : PlgChunk = plg.chunks[i]
-                    #print("Iterating chunk", j)
-                
-                    #chunk_material_index = 0
+                #chunk_material_index = 0
 
-                    for j in range(plg_quad.triangle_offset, plg_quad.triangle_offset + plg_chunk.triangle_count):
-                        plg_triangle = plg.triangles[j]
-                        #print("Iterating triangle", j)
+                for j in range(0, plg_chunk.triangle_count):
+                    triangle_index = plg_quad.triangle_offset + j
                     
-                        vertex_indices = [plg_triangle.vertex_index_3, plg_triangle.vertex_index_2, plg_triangle.vertex_index_1]
+                    plg_triangle : PlgTriangle = plg.triangles[triangle_index]
+                    #print("Iterating triangle", triangle_index)
+                        
+                    vertex_indices = [
+                        vertex_offset + plg_triangle.vertex_index_3, 
+                        vertex_offset + plg_triangle.vertex_index_2, 
+                        vertex_offset + plg_triangle.vertex_index_1
+                    ]
             
-                        if len(set(vertex_indices)) < 3:
-                            print(f"triangle {j} is degenerate, vertices {vertex_indices}")
-                        else:
-                            triangle_vertices = list(range(3))
-
-                            for k, vertex_index in enumerate(vertex_indices):
-                                if vertex_index in vertices:
-                                    triangle_vertices[k] = vertices[vertex_index]
-                                else:
-                                    triangle_vertices[k] = create_vertex_from_plg(plg, quad_index_x, quad_index_y, vertex_index, bm, vertices, uvs1, uvs2, quad_size, landscape_scale)
-                    
-                            face_vertices = (triangle_vertices[0], triangle_vertices[1], triangle_vertices[2])
-            
-                            if bm.faces.get(face_vertices):
-                                #print("face with vertices already exists:", vertex_indices);
-                                for k, vertex_index in enumerate(vertex_indices):
-                                    triangle_vertices[k] = create_vertex_from_plg(plg, quad_index_x, quad_index_y, vertex_index, bm, vertices, uvs1, uvs2, quad_size, landscape_scale)
-                                face_vertices = (triangle_vertices[0], triangle_vertices[1], triangle_vertices[2])
-                
-                            face = bm.faces.new(face_vertices)
-        
-                            face.smooth = True
-        
-                            for k, loop in enumerate(face.loops):
-                                vertex_index = vertex_indices[k]
+                    if len(set(vertex_indices)) < 3:
+                        print(f"triangle {triangle_index} is degenerate, vertices {vertex_indices}")
+                    else:
+                        triangle_vertices = list(range(3))
                             
-                                loop[uv_layer1].uv = uvs1[vertex_index]
-                                loop[uv_layer2].uv = uvs2[vertex_index]
+                        for k, vertex_index in enumerate(vertex_indices):
+                            if vertex_index in vertices:
+                                triangle_vertices[k] = vertices[vertex_index]
+                            else:
+                                triangle_vertices[k] = create_vertex_from_plg(plg, h, vertex_index, bm, vertices, uvs1, uvs2, quad_size, landscape_scale)
+                    
+                        face_vertices = (triangle_vertices[0], triangle_vertices[1], triangle_vertices[2])
+            
+                        if bm.faces.get(face_vertices):
+                           #print("face with vertices already exists:", vertex_indices);
+                           for k, vertex_index in enumerate(vertex_indices):
+                               triangle_vertices[k] = create_vertex_from_plg(plg, h, vertex_index, bm, vertices, uvs1, uvs2, quad_size, landscape_scale)
+                           face_vertices = (triangle_vertices[0], triangle_vertices[1], triangle_vertices[2])
+                
+                        face = bm.faces.new(face_vertices)
+        
+                        face.smooth = True
+        
+                        for k, loop in enumerate(face.loops):
+                            vertex_index = vertex_indices[k]
+                            
+                            loop[uv_layer1].uv = uvs1[vertex_index]
+                            loop[uv_layer2].uv = uvs2[vertex_index]
 
-                            #face.material_index = chunk_material_index
+                        #face.material_index = chunk_material_index
+                
+            bm.verts.ensure_lookup_table()
+            bm.faces.ensure_lookup_table()
         
-        bm.verts.ensure_lookup_table()
-        bm.faces.ensure_lookup_table()
+            planting_obj = bpy.data.objects.new(f"Planting {h}", mesh)
         
-        planting_obj = bpy.data.objects.new("Planting", mesh)
+            planting_area_collection.objects.link(planting_obj)
         
-        planting_area_collection.objects.link(planting_obj)
+            bm.to_mesh(mesh)
+            bm.free()
         
-        bm.to_mesh(mesh)
-        bm.free()
-        
-        #mesh.normals_split_custom_set_from_vertices([v.normal for v in mesh.vertices])
+            #mesh.normals_split_custom_set_from_vertices([v.normal for v in mesh.vertices])
     
-        #mesh.use_auto_smooth = True
+            #mesh.use_auto_smooth = True
     
-        mesh.update()
+            mesh.update()
         
         print("ImportPlg.execute() OUT")
 
@@ -502,9 +505,6 @@ class ExportPlg(Operator, ExportHelper):
         print("ExportPlg.execute() IN")
         
         # ...
-
-        with plg_file_path.open('wb') as plg_writer:
-            plg.serialize(plg_writer)
 
         print("ExportPlg.execute() OUT")
 
