@@ -4,6 +4,7 @@ import bmesh
 import struct
 import math
 import io
+import os
 import numpy as np
 
 from bpy_extras.io_utils import ImportHelper, ExportHelper
@@ -303,7 +304,7 @@ class MoxFile:
         for i in range(numberOfVertices):
             vertex = self.vertices[i]
             
-            if True:
+            if False:
                 print("vertex:", vertex)
                 print("vertex.positionX:", vertex.positionX)
                 print("vertex.positionY:", vertex.positionY)
@@ -653,6 +654,70 @@ def read_text_file_to_dicts(file_path):
     
     return header_values, parsed_data
 
+def write_dicts_to_text_file(file_path, header_values, parsed_data):
+    """Write a header and list of dictionaries back to a text file."""
+    blocks = []
+    
+    # Write the header line
+    blocks.append(serialize_header_line(header_values))
+
+    # Write each data block
+    for data in parsed_data:
+        blocks.append(serialize_data_block(data))
+
+    content = '\n\n'.join(blocks) + '\n'
+
+    with open(file_path, 'w') as file:
+        file.write(content)
+
+def serialize_header_line(header_values):
+    """Serialize ColSetInf header values back to a header line string."""
+    quoted = [f'"{val}"' for val in header_values]
+    return 'ColSetInf ' + ' '.join(quoted)
+
+def serialize_data_block(data):
+    """Serialize a dictionary back into a block of text data."""
+    lines = []
+
+    if 'ID' in data:
+        lines.append(f'# {hex(data["ID"])}')
+
+    for key, value in data.items():
+        if key == 'ID':
+            continue
+        
+        if key in {'MatClass'}:
+            values = ' '.join(f'{v:02x}' for v in value)
+            lines.append(f'{key} {values}')
+        elif key in {'Diffuse', 'Ambient', 'Specular', 'Reflect2', 'Specular2', 'XDiffuse', 'XSpecular'}:
+            values = ' '.join(f'0x{v:06x}' for v in value)
+            lines.append(f'{key} {values}')
+        elif key in {'TexFlags'}:
+            values = ' '.join(f'0x{v:02x}' for v in value)
+            lines.append(f'{key} {values}')
+        elif key in {'Alpha'}:
+            lines.append(f'{key} {value:03d}')
+        elif key in {'SpecProps', 'Fresnel', 'FallOff'}:
+            values = ' '.join(f'{v:03d}' for v in value)
+            lines.append(f'{key} {values}')
+        elif key in {'TexOffset', 'TexScale', 'TexAngle'}:
+            values = ' '.join(f'{v:.6f}' for v in value)
+            lines.append(f'{key} {values}')
+        elif key in {'Tex1Name', 'Tex2Name', 'Tex3Name'}:
+            lines.append(f'{key} "{value}"')
+        #else:
+        #    lines.append(f'{key} {value}')
+
+    return '\n'.join(lines)
+
+def add_hex_color(int_value):
+    """Convert an integer back to a hex color string."""
+    return hex(int_value)
+
+def add_quotes(s):
+    """Add quotes around a string."""
+    return f'"{s}"'
+    
 def addMarker(mox, marker_index, lens_flare_image, marker_objs, parent_obj, collection):
     marker = mox.markers[marker_index]
     marker_parameters = mox.markers[marker_index]
@@ -1341,6 +1406,8 @@ def import_mox(moxFilePath, texture_folder_path, collection):
     if mtlFilePath.exists():
         material_data.color_sets, material_data.material_definitions = read_text_file_to_dicts(mtlFilePath)
         
+    tex_property_names = ["Tex1Name", "Tex2Name", "Tex3Name"]
+    
     for i in range(len(mox.materials)):
         moxMaterial = mox.materials[i]
 
@@ -1355,8 +1422,6 @@ def import_mox(moxFilePath, texture_folder_path, collection):
             #print(f"material index {i} - id {moxMaterial.id:04x} -> {material_definition.get('ID'):04x}")
             #print("material_definition:", material_definition)
             
-            tex_property_names = ["Tex1Name", "Tex2Name", "Tex3Name"]
-            
             tex_nodes = []
             
             material_output = material.node_tree.nodes.get('Material Output')
@@ -1366,6 +1431,7 @@ def import_mox(moxFilePath, texture_folder_path, collection):
                 tex_property_name = tex_property_names[j]
                 
                 tex_node = material.node_tree.nodes.new('ShaderNodeTexImage')
+                tex_node.name = tex_property_name
                 tex_nodes.insert(j, tex_node)
                 
                 if tex_property_name in material_definition:
@@ -1452,23 +1518,17 @@ class ExportMox(Operator, ExportHelper):
     use_triangulate: BoolProperty(
         name="Triangulate",
         description="Triangulate all meshes",
-        default=True,
+        default=False,
     )
 
     mox_version: EnumProperty(
         name="Version",
         description="Target MOX version",
         items=(
-            ('3', "2.03", "Newest format with embedded tangent data and enhanced markers. Not compatible with games before CT5"),
-            ('2', "2.02", "Older format used by games before CT5. Also required for some models such as drivers")
+            ('3', "2.03", "Newest format that features enhanced markers and tangents for normal map support. Not compatible with games before CT5."),
+            ('2', "2.02", "Less advanced format used by older games. Also required for some models such as drivers.")
         ),
         default='3',
-    )
-
-    write_material: BoolProperty(
-        name="Export materials",
-        description="Write .MTL file",
-        default=False,
     )
 
     def execute(self, context):
@@ -1555,15 +1615,75 @@ class ExportMox(Operator, ExportHelper):
             retrieve_marker(mox, i, marker_objs, part_objs)
             
         mox.materials = list(range(len(source_materials)))
-
+        
+        material_data = MaterialData()
+        
+        # TODO
+        material_data.color_sets = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+                
+        tex_property_names = ["Tex1Name", "Tex2Name", "Tex3Name"]
+    
         for i, source_material in enumerate(source_materials):
             mox_material = MoxMaterial()
             mox_material.id = 0x1000 + i
             mox.materials[i] = mox_material
             
+            material = bpy.data.materials.get(source_material)
+            
+            mat_class = [0, 0, 0, 0] # 0 = Mat-Class, 1 = SubType, 2 = AlphaType, 3 = Abhaengigkeit
+            texture_names = ['', '', '']
+            
+            if material is not None:
+                material_data.materials.insert(i, material)
+            
+                for j in range(len(tex_property_names)):
+                    tex_property_name = tex_property_names[j]
+                
+                    tex_node = material.node_tree.nodes.get(tex_property_name)
+                    
+                    if tex_node is None:
+                        continue
+                    
+                    tex_image = tex_node.image
+                    
+                    if tex_image is None:
+                        continue
+                    
+                    tex_name = tex_name = f"{os.path.splitext(tex_image.name)[0]}.tga"
+                    
+                    mat_class[1] = 1
+                    texture_names[j] = tex_name
+                    
+            material_definition = {}
+            
+            material_definition['ID'] = mox_material.id
+            material_definition['MatClass'] = mat_class
+            material_definition['Diffuse'] = [0x969696 for _ in material_data.color_sets]
+            material_definition['Ambient'] = [0 for _ in material_data.color_sets]
+            material_definition['Specular'] = [0 for _ in material_data.color_sets]
+            material_definition['Reflect2'] = [0xffffff for _ in material_data.color_sets]
+            material_definition['Specular2'] = [0 for _ in material_data.color_sets]
+            material_definition['XDiffuse'] = [0 for _ in material_data.color_sets]
+            material_definition['XSpecular'] = [0 for _ in material_data.color_sets]
+            material_definition['Tex1Name'] = texture_names[0]
+            material_definition['Tex2Name'] = texture_names[1]
+            material_definition['Tex3Name'] = texture_names[2]
+            material_definition['TexFlags'] = [0x11, 0x00, 0x00, 0x00]
+            material_definition['TexOffset'] = [0.0, 0.0]
+            material_definition['TexScale'] = [1.0, 1.0]
+            material_definition['TexAngle'] = [0.0]
+            material_definition['Alpha'] = 0
+            material_definition['SpecProps'] = [79, 50, 10]
+            material_definition['Fresnel'] = [97, 50, 80]
+            material_definition['FallOff'] = [0, 30]
+                
+            material_data.material_definitions.insert(i, material_definition)
+                
         with mox_file_path.open('wb') as mox_writer:
             mox.serialize(mox_writer)
             
+        write_dicts_to_text_file(mtl_file_path, material_data.color_sets, material_data.material_definitions)
+        
         print("ExportMox.execute() OUT")
 
         return {'FINISHED'}
