@@ -1520,6 +1520,12 @@ class ExportMox(Operator, ExportHelper):
         description="Triangulate all meshes",
         default=False,
     )
+    
+    write_material: BoolProperty(
+        name="Write Material",
+        description="Write an accompanying MTL file",
+        default=False,
+    )
 
     mox_version: EnumProperty(
         name="Version",
@@ -1615,12 +1621,17 @@ class ExportMox(Operator, ExportHelper):
             retrieve_marker(mox, i, marker_objs, part_objs)
             
         mox.materials = list(range(len(source_materials)))
-        
+            
         material_data = MaterialData()
         
-        # TODO
-        material_data.color_sets = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
-                
+        scene_colors = context.scene.mox_material_color_list
+            
+        if scene_colors and len(scene_colors) > 0:
+            for i, scene_color in enumerate(scene_colors):
+                material_data.color_sets.insert(i, scene_color.name)
+        else:
+            material_data.color_sets = ["Default"]
+
         tex_property_names = ["Tex1Name", "Tex2Name", "Tex3Name"]
     
         for i, source_material in enumerate(source_materials):
@@ -1630,7 +1641,8 @@ class ExportMox(Operator, ExportHelper):
             
             material = bpy.data.materials.get(source_material)
             
-            mat_class = [0, 0, 0, 0] # 0 = Mat-Class, 1 = SubType, 2 = AlphaType, 3 = Abhaengigkeit
+            # TODO
+            mat_class = [0, 0, 0, 0]
             texture_names = ['', '', '']
             
             if material is not None:
@@ -1678,11 +1690,12 @@ class ExportMox(Operator, ExportHelper):
             material_definition['FallOff'] = [0, 30]
                 
             material_data.material_definitions.insert(i, material_definition)
-                
+        
         with mox_file_path.open('wb') as mox_writer:
             mox.serialize(mox_writer)
-            
-        write_dicts_to_text_file(mtl_file_path, material_data.color_sets, material_data.material_definitions)
+                
+        if self.write_material:
+            write_dicts_to_text_file(mtl_file_path, material_data.color_sets, material_data.material_definitions)
         
         print("ExportMox.execute() OUT")
 

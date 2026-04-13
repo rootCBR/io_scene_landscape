@@ -7,6 +7,9 @@ from .MoxParts import *
 
 from mathutils import Vector
 
+from . import MoxMaterialPanels
+from . import MoxMaterialColorsetPanels
+
 part_type_enum = [
     (PartType.DISABLE.name, 'Disable', 'Description'),
     (PartType.X.name, 'X', 'Description'),
@@ -249,6 +252,8 @@ def register():
     bpy.types.Object.mox_part_properties = bpy.props.PointerProperty(type=MoxPartProperties)
     bpy.types.Object.mox_marker_properties = bpy.props.PointerProperty(type=MoxMarkerProperties)
     bpy.utils.register_class(OBJECT_PT_mox)
+    MoxMaterialPanels.register()
+    MoxMaterialColorsetPanels.register()
 
 def unregister():
     unregister_marker_parameter_properties()
@@ -258,3 +263,5 @@ def unregister():
     bpy.utils.unregister_class(MoxPartProperties)
     bpy.utils.unregister_class(MoxMarkerProperties)
     bpy.utils.unregister_class(OBJECT_PT_mox)
+    MoxMaterialPanels.unregister()
+    MoxMaterialColorsetPanels.unregister()
