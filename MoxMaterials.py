@@ -1,6 +1,9 @@
 
 from enum import Enum
 
+class MaterialClass(Enum):
+	Default = 0
+	
 class MaterialSubType(Enum):
 	NoTexture = 0
 	Textured = 1
@@ -17,3 +20,8 @@ class MaterialAlphaType(Enum):
 	Premul = 2
 	Additive = 3
 	ColorKey = 4
+	
+class TextureTiling(Enum):
+	Clip = 0
+	Wrap = 1
+	Mirror = 2

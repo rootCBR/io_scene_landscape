@@ -1115,7 +1115,7 @@ class ImportQad(Operator, ImportHelper):
         geoFilePath = qadFilePath.with_suffix(".geo")
         vtxFilePath = qadFilePath.with_suffix(".vtx")
         idxFilePath = qadFilePath.with_suffix(".idx")
-        textureFolderPath = qadFilePath.parent / "Textures" / "tga"
+        textureFolderPath = qadFilePath.parent / "Textures"
         print("qadFilePath:", qadFilePath)
         print("geoFilePath:", geoFilePath)
         print("textureFolderPath:", textureFolderPath)
@@ -1450,7 +1450,7 @@ class ImportQad(Operator, ImportHelper):
                 continue
 
             if qad_object_data_name not in object_instances:
-                texture_folder_path = qadFilePath.parent / "Textures" / "tga"
+                texture_folder_path = qadFilePath.parent / "Textures"
                 object_file_path = qadFilePath.parent / "Objects" / f"{qad_object_data_name}.mox"
                 
                 try:
@@ -1490,7 +1490,7 @@ class ImportQad(Operator, ImportHelper):
         print("ImportQad.execute() IN")
         qadFilePath = Path(self.filepath)
         geoFilePath = qadFilePath.with_suffix(".geo")
-        textureFolderPath = qadFilePath.parent / "Textures" / "tga"
+        textureFolderPath = qadFilePath.parent / "Textures"
         print("qadFilePath:", qadFilePath)
         print("geoFilePath:", geoFilePath)
         print("textureFolderPath:", textureFolderPath)
@@ -1566,7 +1566,7 @@ class ExportQad(Operator, ExportHelper):
         print("ExportQad.execute() IN")
         qad_file_path = Path(self.filepath)
         geo_file_path = qad_file_path.with_suffix(".geo")
-        texture_folder_path = qad_file_path.parent / "Textures" / "tga"
+        texture_folder_path = qad_file_path.parent / "Textures"
         print("qad_file_path:", qad_file_path)
         print("geo_file_path:", geo_file_path)
         print("texture_folder_path:", texture_folder_path)

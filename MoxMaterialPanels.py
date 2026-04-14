@@ -6,7 +6,7 @@ from .MoxMaterials import *
 from mathutils import Vector
 
 material_matclass_enum = [
-	("0", '0', 'Description')
+	(MaterialClass.Default.name, 'Default', 'Description'),
 ]
 
 material_sub_type_enum = [
@@ -27,6 +27,12 @@ material_alpha_type_enum = [
 	(MaterialAlphaType.ColorKey.name, 'ColorKey', 'Description'),
 ]
 
+texture_tiling_enum = [
+	(TextureTiling.Clip.name, 'Clip', 'Description'),
+	(TextureTiling.Wrap.name, 'Wrap', 'Description'),
+	(TextureTiling.Mirror.name, 'Mirror', 'Description'),
+]
+
 class MoxMaterialColorPropertyGroup(bpy.types.PropertyGroup):
     diffuse: bpy.props.FloatVectorProperty(
         name="Diffuse",
@@ -36,14 +42,14 @@ class MoxMaterialColorPropertyGroup(bpy.types.PropertyGroup):
         min=0.0, max=1.0,
     )
     ambient: bpy.props.FloatVectorProperty(
-        name="Ambient",
+        name="Glow",
         subtype='COLOR',
         size=3,
         default=(0.0, 0.0, 0.0),
         min=0.0, max=1.0,
     )
     specular: bpy.props.FloatVectorProperty(
-        name="Specular",
+        name="Specular1",
         subtype='COLOR',
         size=3,
         default=(0.0, 0.0, 0.0),
@@ -80,12 +86,12 @@ class MoxMaterialColorPropertyGroup(bpy.types.PropertyGroup):
     
     def draw(self, context, layout):
         layout.prop(self, "diffuse")
-        layout.prop(self, "ambient")
-        layout.prop(self, "specular")
-        layout.prop(self, "reflect2")
         layout.prop(self, "specular2")
+        layout.prop(self, "specular")
+        layout.prop(self, "ambient")
         layout.prop(self, "xdiffuse")
         layout.prop(self, "xspecular")
+        layout.prop(self, "reflect2")
 
 class MoxMaterialProperties(bpy.types.PropertyGroup):
     enabled: bpy.props.BoolProperty(name="_Enabled")
@@ -96,10 +102,9 @@ class MoxMaterialProperties(bpy.types.PropertyGroup):
         name="Class",
         description="Description",
         items=material_matclass_enum,
-        default="0",
+        default=MaterialClass.Default.value,
         #update=update_matclass
     )
-    
     sub_type: bpy.props.EnumProperty(
         name="Subtype",
         description="Description",
@@ -107,7 +112,6 @@ class MoxMaterialProperties(bpy.types.PropertyGroup):
         default=MaterialSubType.NoTexture.value,
         #update=update_subtype
     )
-    
     alpha_type: bpy.props.EnumProperty(
         name="Alpha Type",
         description="Description",
@@ -115,7 +119,26 @@ class MoxMaterialProperties(bpy.types.PropertyGroup):
         default=MaterialAlphaType.Disabled.value,
         #update=update_alpha_type
     )
-    
+    matflag_preset: bpy.props.BoolProperty(
+        name="Preset",
+        description="Description",
+        default=False
+    )
+    matflag_standard: bpy.props.BoolProperty(
+        name="Standard",
+        description="Description",
+        default=False
+    )
+    matflag_dirt: bpy.props.BoolProperty(
+        name="Dirt",
+        description="Description",
+        default=True
+    )
+    matflag_chrome: bpy.props.BoolProperty(
+        name="Chrome",
+        description="Description",
+        default=False
+    )
     
     color_properties: bpy.props.CollectionProperty(type=MoxMaterialColorPropertyGroup)
     
@@ -138,7 +161,20 @@ class MoxMaterialProperties(bpy.types.PropertyGroup):
         #update=update_texture_3
     )
     
-    # TODO: TexFlags
+    texture_tiling_u: bpy.props.EnumProperty(
+        name="Texture Tiling U",
+        description="Description",
+        items=texture_tiling_enum,
+        default=TextureTiling.Wrap.value,
+        #update=update_texture_tiling
+    )
+    texture_tiling_v: bpy.props.EnumProperty(
+        name="Texture Tiling V",
+        description="Description",
+        items=texture_tiling_enum,
+        default=TextureTiling.Wrap.value,
+        #update=update_texture_tiling
+    )
     
     texture_offset: bpy.props.FloatVectorProperty(
         name='Texture Offset', 
@@ -230,12 +266,19 @@ class MoxMaterialProperties(bpy.types.PropertyGroup):
         
         layout.use_property_split = True
         layout.use_property_decorate = False
-    
+        
         layout.prop(scene, "mox_material_color_list_preview_enum")
         
         layout.prop(self, "matclass")
         layout.prop(self, "sub_type")
         layout.prop(self, "alpha_type")
+        
+        col = layout.column()
+        row = col.row()
+        row.prop(self, "matflag_preset")
+        row.prop(self, "matflag_standard")
+        row.prop(self, "matflag_dirt")
+        #row.prop(self, "matflag_chrome")
         
         box = layout.box()
         col = box.column()
@@ -266,7 +309,8 @@ class MoxMaterialProperties(bpy.types.PropertyGroup):
             col.prop(self, "texture_1")
             col.prop(self, "texture_2")
             col.prop(self, "texture_3")
-            #col.prop(self, "texture_flags")
+            col.prop(self, "texture_tiling_u")
+            col.prop(self, "texture_tiling_v")
             col.prop(self, "texture_offset")
             col.prop(self, "texture_scale")
             col.prop(self, "texture_angle")
