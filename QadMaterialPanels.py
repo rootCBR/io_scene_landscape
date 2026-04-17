@@ -464,9 +464,8 @@ class QadMaterialProperties(bpy.types.PropertyGroup):
         layout.prop(self, "texture_2_offset")
         layout.prop(self, "texture_2_scale")
     
-class OBJECT_PT_qad_material(bpy.types.Panel):
+class LANDSCAPE_PT_qad_material(bpy.types.Panel):
     bl_label = "QAD"
-    bl_idname = "OBJECT_PT_qad_material"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "material"
@@ -482,9 +481,9 @@ class OBJECT_PT_qad_material(bpy.types.Panel):
 def register():
     bpy.utils.register_class(QadMaterialProperties)
     bpy.types.Material.qad_material_properties = bpy.props.PointerProperty(type=QadMaterialProperties)
-    bpy.utils.register_class(OBJECT_PT_qad_material)
+    bpy.utils.register_class(LANDSCAPE_PT_qad_material)
     
 def unregister():
     del bpy.types.Material.qad_material_properties
     bpy.utils.unregister_class(QadMaterialProperties)
-    bpy.utils.unregister_class(OBJECT_PT_qad_material)
+    bpy.utils.unregister_class(LANDSCAPE_PT_qad_material)

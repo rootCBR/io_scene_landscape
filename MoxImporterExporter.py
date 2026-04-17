@@ -908,6 +908,8 @@ def add_part(mox, part_index, parent_obj, material_data, part_objs : [], collect
     uv_layer1 = bm.loops.layers.uv.new("UV1")
     uv_layer2 = bm.loops.layers.uv.new("UV2")
     
+    uv_layer_names = [uv_layer1.name, uv_layer2.name]
+    
     vertices = {}
     uvs1 = {}
     uvs2 = {}
@@ -973,6 +975,9 @@ def add_part(mox, part_index, parent_obj, material_data, part_objs : [], collect
     for i in range(len(part_material_indices)):
         part_material_index = part_material_indices[i]
         part_material = material_data.materials[part_material_index]
+        
+        part_material.mox_material_properties.setup(part_material, uv_layer_names)
+        
         mesh.materials.append(part_material)
         #print(f"part material {i} -> index {part_material_index}")
         
@@ -1438,6 +1443,8 @@ def import_mox(context, moxFilePath, texture_folder_path, collection):
     if mtlFilePath.exists():
         material_data.color_sets, material_data.material_definitions = read_text_file_to_dicts(mtlFilePath)
         
+        scene.mox_material_color_list.clear()
+        
         for mtl_color in material_data.color_sets:
             item = scene.mox_material_color_list.add()
             item.name = mtl_color
@@ -1449,26 +1456,14 @@ def import_mox(context, moxFilePath, texture_folder_path, collection):
             
         material.use_nodes = True
         material.use_backface_culling = True
-            
+        
         material_definition = next((m for m in material_data.material_definitions if m.get('ID') == mox_material.id), None)
             
         if material_definition:
-            #print(f"material index {i} - id {mox_material.id:04x} -> {material_definition.get('ID'):04x}")
-            #print("material_definition:", material_definition)
-                            
             material_property_group = material.mox_material_properties
             
-            tex_nodes = []
-            
-            material_output = material.node_tree.nodes.get('Material Output')
-            principled_BSDF = material.node_tree.nodes.get('Principled BSDF')
-                    
             for j in range(len(tex_property_names)):
                 tex_property_name = tex_property_names[j]
-                
-                tex_node = material.node_tree.nodes.new('ShaderNodeTexImage')
-                tex_node.name = tex_property_name
-                tex_nodes.insert(j, tex_node)
                 
                 if tex_property_name in material_definition:
                     tex_name = material_definition[tex_property_name]
@@ -1497,50 +1492,50 @@ def import_mox(context, moxFilePath, texture_folder_path, collection):
                         loaded_textures[tex_name] = loaded_texture
                     
                         if loaded_texture != None:
-                            tex_node.image = loaded_texture.image
-                            
                             setattr(material_property_group, f"texture_{j + 1}", loaded_texture)
                 
-            material.node_tree.links.new(tex_nodes[0].outputs[0], principled_BSDF.inputs[0])
-            
             material_property_group.enabled = True
-            material_property_group.matclass = MaterialClass(material_definition['MatClass'][0]).name
-            material_property_group.sub_type = MaterialSubType(material_definition['MatClass'][1]).name
-            material_property_group.alpha_type = MaterialAlphaType(material_definition['MatClass'][2]).name
             
-            material_property_group.matflag_preset = (material_definition['MatClass'][3] & 1) != 0
-            material_property_group.matflag_standard = (material_definition['MatClass'][3] & 2) != 0
-            material_property_group.matflag_dirt = (material_definition['MatClass'][3] & 4) != 0
-            material_property_group.matflag_chrome = (material_definition['MatClass'][3] & 8) != 0
+            try:
+                material_property_group.matclass = MaterialClass(material_definition['MatClass'][0]).name
+                material_property_group.sub_type = MaterialSubType(material_definition['MatClass'][1]).name
+                material_property_group.alpha_type = MaterialAlphaType(material_definition['MatClass'][2]).name
             
-            material_property_group.texture_tiling_u = TextureTiling(material_definition['TexFlags'][0] & 15).name
-            material_property_group.texture_tiling_v = TextureTiling(material_definition['TexFlags'][0] >> 4).name
+                material_property_group.matflag_preset = (material_definition['MatClass'][3] & 1) != 0
+                material_property_group.matflag_standard = (material_definition['MatClass'][3] & 2) != 0
+                material_property_group.matflag_dirt = (material_definition['MatClass'][3] & 4) != 0
+                material_property_group.matflag_chrome = (material_definition['MatClass'][3] & 8) != 0
             
-            material_property_group.texture_offset = material_definition['TexOffset']
-            material_property_group.texture_scale = material_definition['TexScale']
-            material_property_group.texture_angle = material_definition['TexAngle']
-            material_property_group.alpha = material_definition['Alpha']
+                material_property_group.texture_tiling_u = TextureTiling(material_definition['TexFlags'][0] & 15).name
+                material_property_group.texture_tiling_v = TextureTiling(material_definition['TexFlags'][0] >> 4).name
             
-            material_property_group.spec_sharp_1 = material_definition['SpecProps'][0]
-            material_property_group.spec_size_1 = material_definition['SpecProps'][1]
-            material_property_group.spec_sharp_2 = material_definition['SpecProps'][2]
+                material_property_group.texture_offset = material_definition['TexOffset']
+                material_property_group.texture_scale = material_definition['TexScale']
+                material_property_group.texture_angle = material_definition['TexAngle']
+                material_property_group.alpha = material_definition['Alpha']
             
-            material_property_group.fresnel_intensity = material_definition['Fresnel'][0]
-            material_property_group.fresnel_curve = material_definition['Fresnel'][1]
-            material_property_group.fresnel_level = material_definition['Fresnel'][2]
+                material_property_group.spec_sharp_1 = material_definition['SpecProps'][0]
+                material_property_group.spec_size_1 = material_definition['SpecProps'][1]
+                material_property_group.spec_sharp_2 = material_definition['SpecProps'][2]
             
-            material_property_group.falloff_intensity = material_definition['FallOff'][0]
-            material_property_group.falloff_curve = material_definition['FallOff'][1]
+                material_property_group.fresnel_intensity = material_definition['Fresnel'][0]
+                material_property_group.fresnel_curve = material_definition['Fresnel'][1]
+                material_property_group.fresnel_level = material_definition['Fresnel'][2]
+            
+                material_property_group.falloff_intensity = material_definition['FallOff'][0]
+                material_property_group.falloff_curve = material_definition['FallOff'][1]
                     
-            for scene_color_index, scene_color in enumerate(scene.mox_material_color_list):
-                if hasattr(material, "mox_material_properties"):
-                    material_property_group.color_properties.add()
+                for scene_color_index, scene_color in enumerate(scene.mox_material_color_list):
+                    if hasattr(material, "mox_material_properties"):
+                        material_property_group.color_properties.add()
                     
-                    color_property_group = material_property_group.color_properties[scene_color_index]
+                        color_property_group = material_property_group.color_properties[scene_color_index]
 
-                    for prop_name, dict_key in material_color_keys.items():
-                        packed = material_definition[dict_key][scene_color_index]
-                        setattr(color_property_group, prop_name, unpack_color(packed))
+                        for prop_name, dict_key in material_color_keys.items():
+                            packed = material_definition[dict_key][scene_color_index]
+                            setattr(color_property_group, prop_name, unpack_color(packed))
+            except:
+                print(f"Error reading material {mox_material.id}")
             
         material_data.materials.insert(i, material)
         
@@ -1560,6 +1555,9 @@ def import_mox(context, moxFilePath, texture_folder_path, collection):
     for i in range(len(mox.markers)):
         add_marker_parameters(mox, i, marker_objs, part_objs)
     
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+        
     print("import_mox() OUT")
         
     return obj
@@ -1719,10 +1717,8 @@ class ExportMox(Operator, ExportHelper):
             for i, scene_color in enumerate(scene_colors):
                 material_data.color_sets.insert(i, scene_color.name)
         else:
-            material_data.color_sets = ["Default"]
+            material_data.color_sets = ["Default"] # should be impossible
 
-        tex_property_names = ["Tex1Name", "Tex2Name", "Tex3Name"]
-    
         for i, source_material in enumerate(source_materials):
             mox_material = MoxMaterial()
             mox_material.id = 0x1000 + i
@@ -1756,23 +1752,6 @@ class ExportMox(Operator, ExportHelper):
             if material is not None:
                 material_data.materials.insert(i, material)
             
-                for j in range(len(tex_property_names)):
-                    tex_property_name = tex_property_names[j]
-                
-                    tex_node = material.node_tree.nodes.get(tex_property_name)
-                    
-                    if tex_node is None:
-                        continue
-                    
-                    tex_image = tex_node.image
-                    
-                    if tex_image is None:
-                        continue
-                    
-                    tex_name = f"{os.path.splitext(tex_image.name)[0]}.tga"
-                    
-                    material_definition[tex_property_names[j]] = tex_name
-                    
                 if hasattr(material, "mox_material_properties"):
                     material_property_group = material.mox_material_properties
                 
@@ -1792,6 +1771,16 @@ class ExportMox(Operator, ExportHelper):
                     if material_property_group.matflag_chrome:
                         material_definition['MatClass'][3] |= 8
             
+                    for j in range(len(tex_property_names)):
+                        texture_property = getattr(material_property_group, f"texture_{j + 1}")
+                        
+                        if not texture_property:
+                            continue
+                        
+                        tex_name = f"{os.path.splitext(texture_property.name)[0]}.tga"
+                    
+                        material_definition[tex_property_names[j]] = tex_name
+                        
                     material_definition['TexFlags'][0] = TextureTiling[material_property_group.texture_tiling_u].value & 15
                     material_definition['TexFlags'][0] |= (TextureTiling[material_property_group.texture_tiling_v].value & 15) << 4
                 
@@ -1829,6 +1818,9 @@ class ExportMox(Operator, ExportHelper):
                 
         if self.write_material:
             write_dicts_to_text_file(mtl_file_path, material_data.color_sets, material_data.material_definitions)
+        
+        root_obj.select_set(True)
+        bpy.context.view_layer.objects.active = root_obj
         
         print("ExportMox.execute() OUT")
 
