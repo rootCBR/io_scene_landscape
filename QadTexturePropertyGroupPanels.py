@@ -135,7 +135,7 @@ class QadTexturePropertyGroupProperties(bpy.types.PropertyGroup):
     # 2 - Kies
     slip_mode: bpy.props.IntProperty(
         name="Slip Mode",
-        description="Description",
+        description="0: Normal; 1: Dirt; 2: Gravel",
         default=0,
         min=0,
         max=2
@@ -154,7 +154,7 @@ class QadTexturePropertyGroupProperties(bpy.types.PropertyGroup):
     
     collision_options: bpy.props.IntProperty(
         name="Collision Options",
-        description="Description",
+        description="Set to 1 to disable collisions for this texture property group.",
         default=0,
         min=0,
         max=100
@@ -166,7 +166,7 @@ class QadTexturePropertyGroupProperties(bpy.types.PropertyGroup):
     # 2 - Erde
     collision_sound_type: bpy.props.IntProperty(
         name="Collision Sound Type",
-        description="Description",
+        description="0: Stone; 1: Metal; 2: Dirt",
         default=0,
         min=0,
         max=2
@@ -177,7 +177,7 @@ class QadTexturePropertyGroupProperties(bpy.types.PropertyGroup):
     enable_render: bpy.props.BoolProperty(name="Visible", default=True)
     
     emitter: bpy.props.IntProperty(
-        name="Emitter",
+        name="Particle Emitter",
         description="Description",
         default=0,
         min=0,

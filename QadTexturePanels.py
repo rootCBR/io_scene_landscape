@@ -21,32 +21,36 @@ class QadTextureProperties(bpy.types.PropertyGroup):
     def draw(self, context, layout):
         layout.prop(self, "texture_properties_group")
         
-class MY_PT_TexturePanel(bpy.types.Panel):
+class LANDSCAPE_PT_texture_panel(bpy.types.Panel):
     bl_label = "QAD Texture"
-    bl_idname = "MY_PT_TexturePanel"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "texture"
+    bl_space_type = 'IMAGE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "QAD"
 
     def draw(self, context):
         layout = self.layout
-        texture = context.texture
         
-        if texture:
-            if hasattr(texture, "qad_texture_properties"):
-                texture.qad_texture_properties.draw(context, layout)
+        image = context.space_data.image
+        
+        if image is None:
+            return
+        
+        if not hasattr(image, "qad_texture_properties"):
+            return
+        
+        image.qad_texture_properties.draw(context, layout)
         
 classes = [
     QadTextureProperties, 
-    MY_PT_TexturePanel
+    LANDSCAPE_PT_texture_panel
 ]
 
 def register():
     for c in classes:
         bpy.utils.register_class(c)
-    bpy.types.Texture.qad_texture_properties = bpy.props.PointerProperty(type=QadTextureProperties)
+    bpy.types.Image.qad_texture_properties = bpy.props.PointerProperty(type=QadTextureProperties)
 
 def unregister():
     for c in classes:
         bpy.utils.unregister_class(c)
-    del bpy.types.Texture.qad_texture_properties
+    del bpy.types.Image.qad_texture_properties

@@ -1,3 +1,4 @@
+import bpy
 
 from mathutils import Vector, Matrix
 
@@ -84,3 +85,45 @@ def linear_to_srgb(x):
         y = 1.055*x**(1/2.4) - 0.055
  
     return y
+
+def create_placeholder_image(
+    name: str = "placeholder",
+    width: int = 64,
+    height: int = 64,
+    color: tuple = (1.0, 0.0, 1.0, 1.0)  # magenta = missing texture convention
+) -> bpy.types.Image:
+    """
+    Create a placeholder bpy.types.Image filled with a solid color.
+    Used as a fallback when an image cannot be loaded from a file path.
+
+    Args:
+        name:   Name for the new image datablock.
+        width:  Image width in pixels.
+        height: Image height in pixels.
+        color:  RGBA fill color, each channel in [0.0, 1.0].
+
+    Returns:
+        A bpy.types.Image with no filepath, packed into the .blend.
+    """
+    # Remove any existing image with the same name to avoid duplicates
+    if name in bpy.data.images:
+        bpy.data.images.remove(bpy.data.images[name])
+
+    image = bpy.data.images.new(
+        name=name,
+        width=width,
+        height=height,
+        alpha=True,
+        float_buffer=False
+    )
+
+    # Fill all pixels with the given color.
+    # image.pixels is a flat RGBA array of length width * height * 4.
+    pixel_count = width * height
+    image.pixels = color * pixel_count
+
+    # Mark as not file-backed so Blender won't try to reload from disk
+    image.source = 'GENERATED'
+    image.pack()  # Embed pixel data into the .blend file
+
+    return image

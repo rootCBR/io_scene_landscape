@@ -1,5 +1,6 @@
 import bpy
 import math
+import os
 
 from .QadMaterials import *
 
@@ -45,6 +46,14 @@ class ShaderNodeItem:
         self.uv_map_node = None
         self.mapping_node = None
         
+def find_material(material_property_group):
+    for mat in bpy.data.materials:
+        if not hasattr(mat, "qad_material_properties"):
+            continue
+        if mat.qad_material_properties == material_property_group:
+            return mat
+    return None
+
 def build_default_shader(self, material, shader_node_items, bsdf_node, uv_layer_names):
     node_tree = material.node_tree
     
@@ -143,8 +152,9 @@ def build_shader_for_type_0(self, material, shader_node_items, bsdf_node, uv_lay
     for texture_index, uv_layer_index in uv_layer_per_texture.items():
         uv_map_node = uv_map_nodes[texture_index]
         mapping_node = mapping_nodes[texture_index]
-
-        uv_map_node.uv_map = uv_layer_names[uv_layer_index]
+        
+        if uv_layer_names:
+            uv_map_node.uv_map = uv_layer_names[uv_layer_index]
         
         # [0] = textures[0].offset.x
         # [1] = textures[0].offset.y
@@ -197,18 +207,14 @@ def build_shader(self, material, uv_layer_names):
     shader_node_items = [ShaderNodeItem() for _ in range(len(textures))]
 
     for j in range(len(all_textures)):
-        texture = all_textures[j]
+        image = all_textures[j]
         
         is_bump = (j + 1) > len(textures)
         
-        image = None
         texture_slot_index = 0
         node_name = ""
         node_label = ""
 
-        if texture:
-            image = texture.image
-            
         if is_bump:
             texture_slot_index = j - len(textures)
             node_name = f"bump_texture_{texture_slot_index + 1}"
@@ -242,7 +248,9 @@ def build_shader(self, material, uv_layer_names):
         if not shader_node_item.mapping_node:
             uv_map_node = node_tree.nodes.new('ShaderNodeUVMap')
             uv_map_node.location = (-2000, -500 * j)
-            uv_map_node.uv_map = uv_layer_names[0]
+            
+            if uv_layer_names:
+                uv_map_node.uv_map = uv_layer_names[0]
                     
             mapping_node = node_tree.nodes.new(type='ShaderNodeMapping')
             mapping_node.location = (-1500, -500 * j)
@@ -301,11 +309,11 @@ def update_shader(self, material):
             obj.update_tag(refresh={'DATA'})
     
 def update(self, context):
-    if not hasattr(context, 'material'):
-        return
-    
     obj = context.object
-    material = context.material
+    material = find_material(self)
+
+    if not material:
+        return
     
     uv_layer_names = None
 
@@ -318,21 +326,20 @@ def update_type(self, context):
     update(self, context)
     
 def update_texture(self, context, prop_name):
-    node_tree = context.material.node_tree
+    material = find_material(self)
+    
+    node_tree = material.node_tree
     
     if not node_tree.nodes.get("output_custom"):
         update(self, context)
         return
     
-    tex_prop = getattr(self, prop_name)
+    image = getattr(self, prop_name)
     
-    image = None
-    
-    if tex_prop:
-        image = tex_prop.image
-        
     tex_node = node_tree.nodes.get(prop_name)
-    tex_node.image = image
+    
+    if tex_node:
+        tex_node.image = image
     
 def update_texture_1(self, context):
     update_texture(self, context, "texture_1")
@@ -371,44 +378,44 @@ class QadMaterialProperties(bpy.types.PropertyGroup):
     
     texture_1: bpy.props.PointerProperty(
         name="Texture 1",
-        type=bpy.types.Texture,
+        type=bpy.types.Image,
         description="Description",
         update=update_texture_1
     )
     texture_2: bpy.props.PointerProperty(
         name="Texture 2",
-        type=bpy.types.Texture,
+        type=bpy.types.Image,
         description="Description",
         update=update_texture_2
     )
     texture_3: bpy.props.PointerProperty(
         name="Texture 3",
-        type=bpy.types.Texture,
+        type=bpy.types.Image,
         description="Description",
         update=update_texture_3
     )
     texture_4: bpy.props.PointerProperty(
         name="Texture 4",
-        type=bpy.types.Texture,
+        type=bpy.types.Image,
         description="Description",
         update=update_texture_4
     )
     
     bump_texture_1: bpy.props.PointerProperty(
         name="Bump Texture 1",
-        type=bpy.types.Texture,
+        type=bpy.types.Image,
         description="Description",
         update=update_bump_texture_1
     )
     bump_texture_2: bpy.props.PointerProperty(
         name="Bump Texture 2",
-        type=bpy.types.Texture,
+        type=bpy.types.Image,
         description="Description",
         update=update_bump_texture_2
     )
     bump_texture_3: bpy.props.PointerProperty(
         name="Bump Texture 3",
-        type=bpy.types.Texture,
+        type=bpy.types.Image,
         description="Description",
         update=update_bump_texture_3
     )
@@ -477,13 +484,88 @@ class LANDSCAPE_PT_qad_material(bpy.types.Panel):
         if material:
             if hasattr(material, "qad_material_properties"):
                 material.qad_material_properties.draw(context, layout)
-				
+				  
+def get_texture_node(material, input_name):
+    if not material or not material.use_nodes:
+        return
+    
+    if not input_name:
+        return
+        
+    nodes = material.node_tree.nodes
+        
+    bsdf = next((n for n in nodes if n.type == 'BSDF_PRINCIPLED'), None)
+    if not bsdf:
+        return
+        
+    base_color_input = bsdf.inputs[input_name]
+        
+    if not base_color_input.is_linked:
+        return
+        
+    linked_node = base_color_input.links[0].from_node
+        
+    if linked_node.type == 'TEX_IMAGE':
+        return linked_node
+        
+    # Recursively search upstream for any TEX_IMAGE node
+    def find_image_upstream(node, visited=None):
+        if visited is None:
+            visited = set()
+        if node.name in visited:
+            return None
+        visited.add(node.name)
+            
+        if node.type == 'TEX_IMAGE':
+            return node
+            
+        for inp in node.inputs:
+            if inp.is_linked:
+                upstream = inp.links[0].from_node
+                result = find_image_upstream(upstream, visited)
+                if result:
+                    return result
+        return None
+        
+    tex_node = find_image_upstream(linked_node)
+    
+    return tex_node
+
+@bpy.app.handlers.persistent
+def on_load_post(filepath):
+    scene = bpy.context.scene
+    
+    for obj in scene.objects:
+        if obj.type == 'MESH':
+            for material_slot in obj.material_slots:
+                material = material_slot.material
+                
+                if material is None:
+                    continue
+                
+                if not hasattr(material, "qad_material_properties"):
+                    continue
+                
+                qad_material_properties : QadMaterialProperties = material.qad_material_properties
+                
+                if qad_material_properties.texture_1:
+                    continue
+                
+                tex_node = get_texture_node(material, "Base Color")
+
+                if tex_node is None:
+                    continue
+
+                qad_material_properties.texture_1 = tex_node.image
+                
 def register():
     bpy.utils.register_class(QadMaterialProperties)
     bpy.types.Material.qad_material_properties = bpy.props.PointerProperty(type=QadMaterialProperties)
     bpy.utils.register_class(LANDSCAPE_PT_qad_material)
+    bpy.app.handlers.load_post.append(on_load_post)
     
 def unregister():
     del bpy.types.Material.qad_material_properties
     bpy.utils.unregister_class(QadMaterialProperties)
     bpy.utils.unregister_class(LANDSCAPE_PT_qad_material)
+    bpy.app.handlers.load_post.remove(on_load_post)

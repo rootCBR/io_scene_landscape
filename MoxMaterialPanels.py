@@ -158,16 +158,12 @@ def build_shader(self, material, uv_layer_names):
     shader_node_item = ShaderNodeItem()
 
     for j in range(len(textures)):
-        texture = textures[j]
+        image = textures[j]
         
-        image = None
         texture_slot_index = j
         node_name = f"texture_{texture_slot_index + 1}"
         node_label = f"Texture {texture_slot_index + 1}"
 
-        if texture:
-            image = texture.image
-            
         tex_node = node_tree.nodes.new('ShaderNodeTexImage')
         tex_node.location = (-1000, -500 * j)
         tex_node.image = image
@@ -269,16 +265,11 @@ def update_texture(self, context, prop_name):
         update(self, context)
         return
     
-    tex_prop = getattr(self, prop_name)
+    image = getattr(self, prop_name)
     
-    image = None
-    
-    if tex_prop:
-        image = tex_prop.image
-        
     tex_node = node_tree.nodes.get(prop_name)
     
-    if tex_node != None:
+    if tex_node:
         tex_node.image = image
     
 def update_texture_1(self, context):
@@ -312,6 +303,9 @@ def update_alpha(self, context):
     
 def update_color(self, context, prop_name):
     material = find_material(self)
+    
+    if not material:
+        return
     
     node_tree = material.node_tree
     
@@ -466,19 +460,19 @@ class MoxMaterialProperties(bpy.types.PropertyGroup):
     
     texture_1: bpy.props.PointerProperty(
         name="Diffuse Map",
-        type=bpy.types.Texture,
+        type=bpy.types.Image,
         description="Description",
         update=update_texture_1
     )
     texture_2: bpy.props.PointerProperty(
         name="Normal Map",
-        type=bpy.types.Texture,
+        type=bpy.types.Image,
         description="Description",
         update=update_texture_2
     )
     texture_3: bpy.props.PointerProperty(
         name="Extra",
-        type=bpy.types.Texture,
+        type=bpy.types.Image,
         description="Description",
         update=update_texture_3
     )
@@ -742,7 +736,6 @@ def on_depsgraph_update_post(scene, depsgraph):
         if not isinstance(update.id, bpy.types.Material):
             continue
 
-        # Look up by name to ensure you get the same datablock everywhere
         mat = bpy.data.materials.get(update.id.name)
 
         if mat is None or not hasattr(mat, "mox_material_properties"):

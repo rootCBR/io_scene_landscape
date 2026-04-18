@@ -1429,14 +1429,12 @@ def import_mox(context, moxFilePath, texture_folder_path, collection):
     lens_flare_image_path = addon_directory / "lensflare.tga"
     
     mox = MoxFile()
-        
-    loaded_textures = {}
-
+    
     material_data = MaterialData()
-        
+    
     with moxFilePath.open('rb') as mox_reader:
         mox.deserialize(mox_reader)
-            
+        
     part_objs = list(range(len(mox.parts)))
     marker_objs = []
     
@@ -1471,28 +1469,18 @@ def import_mox(context, moxFilePath, texture_folder_path, collection):
                     if tex_name:
                         tex_file_path = textureFolderPath / tex_name
             
-                        print("tex_name:", tex_name)
-
-                        loaded_texture = None
-
-                        if tex_name in loaded_textures:
-                            loaded_texture = loaded_textures[tex_name]
-                        else:
-                            loaded_texture = bpy.data.textures.new(name=tex_name, type='IMAGE')
-                            loaded_texture.use_fake_user = True
-                    
+                        image = bpy.data.images.get(tex_name)
+                        
+                        if not image:
                             if tex_file_path.exists():
                                 image = bpy.data.images.load(str(tex_file_path))
+                            else:
+                                image = create_placeholder_image(tex_name)
                                 
-                                if j == 1:
-                                    image.colorspace_settings.name = 'Non-Color'
+                        if j == 1:
+                            image.colorspace_settings.name = 'Non-Color'
                                     
-                                loaded_texture.image = image
-                                    
-                        loaded_textures[tex_name] = loaded_texture
-                    
-                        if loaded_texture != None:
-                            setattr(material_property_group, f"texture_{j + 1}", loaded_texture)
+                        setattr(material_property_group, f"texture_{j + 1}", image)
                 
             material_property_group.enabled = True
             

@@ -1115,10 +1115,10 @@ class ImportQad(Operator, ImportHelper):
         geoFilePath = qadFilePath.with_suffix(".geo")
         vtxFilePath = qadFilePath.with_suffix(".vtx")
         idxFilePath = qadFilePath.with_suffix(".idx")
-        textureFolderPath = qadFilePath.parent / "Textures"
+        texture_folder_path = qadFilePath.parent / "Textures"
         print("qadFilePath:", qadFilePath)
         print("geoFilePath:", geoFilePath)
-        print("textureFolderPath:", textureFolderPath)
+        print("texture_folder_path:", texture_folder_path)
     
         collection = bpy.context.collection
         
@@ -1153,8 +1153,6 @@ class ImportQad(Operator, ImportHelper):
         else:
             with geoFilePath.open('rb') as geo_file:
                 geo.deserialize(geo_file)
-
-        loaded_textures = {}
 
         materials = []
         
@@ -1251,6 +1249,8 @@ class ImportQad(Operator, ImportHelper):
                 if not texture_name:
                     continue
                 
+                texture_name = f"{texture_name}.tga"
+                
                 is_bump = texture_name in bumpTextureNames
                 
                 texture_slot_index = 0
@@ -1263,35 +1263,26 @@ class ImportQad(Operator, ImportHelper):
                     texture_slot_index = j
                     texture_property_name = f"texture_{texture_slot_index + 1}"
                 
-                texture_file_path = textureFolderPath / f"{texture_name}.tga"
+                texture_file_path = texture_folder_path / texture_name
             
-                loaded_texture = None
-
-                if texture_name in loaded_textures:
-                    loaded_texture = loaded_textures[texture_name]
-                else:
-                    loaded_texture = bpy.data.textures.new(name=texture_name, type='IMAGE')
-                    loaded_texture.use_fake_user = True
-                    
+                image = bpy.data.images.get(texture_name)
+                        
+                if not image:
                     if texture_file_path.exists():
                         image = bpy.data.images.load(str(texture_file_path))
-                        #image.use_fake_user = True
-                        
-                        if is_bump:
-                            image.colorspace_settings.name = 'Non-Color'
-                
-                        loaded_texture.image = image
-                        
-                        if not is_bump:
-                            texture_name_index = qad.textureNames.index(texture_name)
-                            texture_property_group_index = qad.texture_group_indices[texture_name_index] # TODO
-                            #texture_property_group_name = qad.texture_property_groups[texture_property_group_index].name
-                            loaded_texture.qad_texture_properties.texture_properties_group = f"{texture_property_group_index}"
-            
-                    loaded_textures[texture_name] = loaded_texture
+                    else:
+                        image = create_placeholder_image(texture_name)
                     
-                print(f"{texture_property_name} = {loaded_texture} ({texture_name})")
-                material.qad_material_properties[texture_property_name] = loaded_texture
+                if is_bump:
+                    image.colorspace_settings.name = 'Non-Color'
+                    
+                if not is_bump:
+                    texture_name_index = qad.textureNames.index(texture_name)
+                    texture_property_group_index = qad.texture_group_indices[texture_name_index] # TODO
+                    #texture_property_group_name = qad.texture_property_groups[texture_property_group_index].name
+                    image.qad_texture_properties.texture_properties_group = f"{texture_property_group_index}"
+                    
+                material.qad_material_properties[texture_property_name] = image
                 
             material.qad_material_properties.enabled = True
             material.qad_material_properties.type = MaterialType(qad_material_type).name
@@ -1490,10 +1481,10 @@ class ImportQad(Operator, ImportHelper):
         print("ImportQad.execute() IN")
         qadFilePath = Path(self.filepath)
         geoFilePath = qadFilePath.with_suffix(".geo")
-        textureFolderPath = qadFilePath.parent / "Textures"
+        texture_folder_path = qadFilePath.parent / "Textures"
         print("qadFilePath:", qadFilePath)
         print("geoFilePath:", geoFilePath)
-        print("textureFolderPath:", textureFolderPath)
+        print("texture_folder_path:", texture_folder_path)
 
         qad = QadFile()
         geo = GeoFile()

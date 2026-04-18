@@ -755,39 +755,34 @@ class CData():
             ]
             
             for j in range(len(textures)):
-                texture = textures[j]
+                image = textures[j]
         
                 texture_name = default_texture_name
                 
-                if texture:
-                    image = texture.image
                 
-                    if image:
-                        texture_name = os.path.splitext(image.name)[0]
+                if image:
+                    texture_name = os.path.splitext(image.name)[0]
                     
-                    if texture_name not in led_material_indices:
-                        led_material_indices[texture_name] = len(self.LedMaterialsList)
+                if texture_name not in led_material_indices:
+                    led_material_indices[texture_name] = len(self.LedMaterialsList)
                 
-                        texture_property_group = texture.qad_texture_properties.texture_properties_group
+                    texture_property_group = image.qad_texture_properties.texture_properties_group
 
-                        #print(f"texture_property_group = {texture_property_group}")
+                    #print(f"texture_property_group = {texture_property_group}")
 
-                        # TODO: maintain order
-                        led_material = LedMaterial()
-                        led_material.lmTexName1 = texture_name
-                        led_material.lmTexPropGroup = int(texture_property_group)
+                    # TODO: maintain order
+                    led_material = LedMaterial()
+                    led_material.lmTexName1 = texture_name
+                    led_material.lmTexPropGroup = int(texture_property_group)
                         
-                        if (j < len(bump_textures)):
-                            bump_texture = bump_textures[j]
+                    if (j < len(bump_textures)):
+                        bump_image = bump_textures[j]
                         
-                            if bump_texture:
-                                bump_image = bump_texture.image
-                            
-                                if bump_image:
-                                    bump_texture_name = os.path.splitext(bump_image.name)[0]
-                                    led_material.lmTexObj2 = bump_texture_name
+                        if bump_image:
+                            bump_texture_name = os.path.splitext(bump_image.name)[0]
+                            led_material.lmTexObj2 = bump_texture_name
                                 
-                        self.LedMaterialsList.append(led_material)
+                    self.LedMaterialsList.append(led_material)
             
                 led_material_index = led_material_indices[texture_name]
                         
