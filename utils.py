@@ -92,19 +92,6 @@ def create_placeholder_image(
     height: int = 64,
     color: tuple = (1.0, 0.0, 1.0, 1.0)  # magenta = missing texture convention
 ) -> bpy.types.Image:
-    """
-    Create a placeholder bpy.types.Image filled with a solid color.
-    Used as a fallback when an image cannot be loaded from a file path.
-
-    Args:
-        name:   Name for the new image datablock.
-        width:  Image width in pixels.
-        height: Image height in pixels.
-        color:  RGBA fill color, each channel in [0.0, 1.0].
-
-    Returns:
-        A bpy.types.Image with no filepath, packed into the .blend.
-    """
     # Remove any existing image with the same name to avoid duplicates
     if name in bpy.data.images:
         bpy.data.images.remove(bpy.data.images[name])

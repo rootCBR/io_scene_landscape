@@ -759,22 +759,24 @@ class CData():
         
                 texture_name = default_texture_name
                 
-                
                 if image:
                     texture_name = os.path.splitext(image.name)[0]
                     
                 if texture_name not in led_material_indices:
                     led_material_indices[texture_name] = len(self.LedMaterialsList)
                 
-                    texture_property_group = image.qad_texture_properties.texture_properties_group
+                    texture_property_group_index = int(image.qad_texture_properties.texture_properties_group)
 
-                    #print(f"texture_property_group = {texture_property_group}")
+                    texture_property_group = bpy.context.scene.qad_texture_property_group_list[texture_property_group_index]
+                    texture_property_group_name = texture_property_group.name
 
                     # TODO: maintain order
                     led_material = LedMaterial()
                     led_material.lmTexName1 = texture_name
-                    led_material.lmTexPropGroup = int(texture_property_group)
+                    led_material.lmTexPropGroup = texture_property_group_index
                         
+                    print(f"{texture_name} -> {led_material.lmTexPropGroup}: {texture_property_group_name}")
+                    
                     if (j < len(bump_textures)):
                         bump_image = bump_textures[j]
                         

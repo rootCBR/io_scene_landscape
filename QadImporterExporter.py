@@ -1245,11 +1245,10 @@ class ImportQad(Operator, ImportHelper):
             
             for j in range(len(all_texture_names)):
                 texture_name = all_texture_names[j]
+                texture_file_name = f"{texture_name}.tga"
                 
                 if not texture_name:
                     continue
-                
-                texture_name = f"{texture_name}.tga"
                 
                 is_bump = texture_name in bumpTextureNames
                 
@@ -1263,15 +1262,15 @@ class ImportQad(Operator, ImportHelper):
                     texture_slot_index = j
                     texture_property_name = f"texture_{texture_slot_index + 1}"
                 
-                texture_file_path = texture_folder_path / texture_name
-            
-                image = bpy.data.images.get(texture_name)
+                image = bpy.data.images.get(texture_file_name)
                         
                 if not image:
+                    texture_file_path = texture_folder_path / texture_file_name
+                    
                     if texture_file_path.exists():
                         image = bpy.data.images.load(str(texture_file_path))
                     else:
-                        image = create_placeholder_image(texture_name)
+                        image = create_placeholder_image(texture_file_name)
                     
                 if is_bump:
                     image.colorspace_settings.name = 'Non-Color'
@@ -1445,11 +1444,11 @@ class ImportQad(Operator, ImportHelper):
                 object_file_path = qadFilePath.parent / "Objects" / f"{qad_object_data_name}.mox"
                 
                 try:
-                    mox_obj = import_mox(object_file_path, texture_folder_path, object_reference_collection)
+                    mox_obj = import_mox(context, object_file_path, texture_folder_path, object_reference_collection)
                     object_instances[qad_object_data_name] = mox_obj
                     loaded_objects_counter += 1
-                except:
-                    print(f"Failed to load object: {qad_object_data_name}") 
+                except Exception as ex:
+                    print(f"Failed to load object: {qad_object_data_name}: {ex}") 
                     object_skip_instances.append(qad_object_data_name)
                     continue
                 

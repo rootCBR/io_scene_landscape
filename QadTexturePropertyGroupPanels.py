@@ -152,6 +152,10 @@ class QadTexturePropertyGroupProperties(bpy.types.PropertyGroup):
         maxlen=64
     )
     
+    # IDC_WHEELCOLLI
+    # 0
+    # 1 - IDC_NOCOLLI1 - "Keine Kollision"
+    # 2 - IDC_WHEELCOLLI - "Reifeneffekt" - Street Decals, Streetmarks
     collision_options: bpy.props.IntProperty(
         name="Collision Options",
         description="Set to 1 to disable collisions for this texture property group.",
